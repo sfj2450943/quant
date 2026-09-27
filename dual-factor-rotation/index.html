@@ -1,0 +1,2155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>双因子轮动策略 · 动量(BIAS20) + 低波动(Vol60) · 实时</title>
+<link rel="stylesheet" href="../theme.css">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);
+    color:var(--tx);min-height:100vh;padding:20px;
+  }
+  .container{max-width:var(--maxw);margin:0 auto;}
+  header{text-align:center;padding:14px 0 6px;}
+  header h1{font-size:20px;font-weight:500;letter-spacing:.2px;color:var(--tx);}
+  header .subtitle{color:var(--tx2);font-size:13px;margin-top:6px;}
+  .disclaimer{
+    margin:14px auto 18px;max-width:var(--maxw);text-align:center;color:var(--gold);
+    font-size:13px;font-weight:600;border:1px dashed rgba(240,160,32,.4);
+    padding:10px 16px;border-radius:var(--radius);background:rgba(240,160,32,.06);
+  }
+  .disclaimer b{color:var(--up);}
+
+  /* 数据状态条 */
+  .status-bar{display:flex;align-items:center;gap:8px;margin:0 auto 16px;max-width:var(--maxw);
+    padding:10px 16px;border-radius:var(--radius);font-size:12.5px;font-weight:600;border:1px solid var(--line);
+    background:var(--panel2);transition:all .3s;}
+  .status-bar.loading{color:var(--accent);border-color:rgba(77,139,255,.45);}
+  .status-bar.ok{color:var(--dn);border-color:rgba(30,199,125,.45);}
+  .status-bar.warn{color:var(--gold);border-color:rgba(240,160,32,.45);}
+  .status-bar.error{color:var(--up);border-color:rgba(255,77,79,.45);}
+  .dot-status{width:9px;height:9px;border-radius:50%;background:currentColor;flex:0 0 auto;}
+  .status-bar.loading .dot-status{animation:pulse 1s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);margin-bottom:18px;overflow:hidden;}
+  .card-head{padding:14px 20px;display:flex;justify-content:space-between;align-items:center;
+    border-bottom:1px solid var(--line);gap:10px;flex-wrap:wrap;}
+  .card-head h2{font-size:14.5px;font-weight:700;display:flex;align-items:center;gap:8px;}
+  .card-head .tag{font-size:11px;color:var(--tx2);font-weight:500;}
+  .card-body{padding:18px 20px;}
+
+  /* 概览 */
+  .overview-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .overview-grid.single{grid-template-columns:1fr;}
+  .ov-item{background:var(--panel2);border:1px solid var(--line);
+    border-radius:var(--radius);padding:16px 18px;position:relative;}
+  .ov-item.attack{border-left:4px solid var(--warn);}
+  .ov-item.defend{border-left:4px solid var(--accent-l);}
+  .ov-item.single{border-left:4px solid var(--gold);}
+  .ov-pool{font-size:12px;color:var(--tx2);font-weight:600;letter-spacing:1px;}
+  .ov-name{font-size:18px;font-weight:800;margin:6px 0 10px;}
+  .ov-row{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:13px;}
+  .ov-row .l{color:var(--tx2);}
+  .badge{display:inline-block;padding:3px 10px;border-radius:var(--radius-pill);font-size:11.5px;font-weight:700;}
+  .b-hold{background:rgba(240,160,32,.16);color:var(--gold);}
+  .b-buy{background:rgba(30,199,125,.16);color:var(--dn);}
+  .b-switch{background:rgba(77,139,255,.16);color:var(--accent);}
+
+  /* 概览精简布局（仅 现有持仓 / 下次调仓日） */
+  .ov-line{display:flex;align-items:baseline;gap:14px;padding:12px 2px;border-bottom:1px dashed var(--line);}
+  .ov-line:last-child{border-bottom:none;}
+  .ov-label{flex:0 0 84px;font-size:13px;color:var(--tx2);font-weight:600;line-height:1.3;}
+  .ov-value{flex:1;display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:14px;font-weight:700;color:var(--tx);line-height:1.3;}
+  .ov-chip{background:rgba(240,160,32,.12);color:var(--gold);border:1px solid rgba(240,160,32,.25);
+    padding:5px 12px;border-radius:var(--radius-sm);font-size:13px;font-weight:700;white-space:nowrap;}
+  .ov-chip .c{color:var(--tx2);font-weight:500;font-size:11.5px;margin-left:6px;}
+
+  /* 规则卡 */
+  .rule-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .rule-box{background:var(--panel2);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;}
+  .rule-box h3{font-size:14px;margin-bottom:8px;color:var(--gold);}
+  .rule-box .formula{font-family:"SFMono-Regular",Consolas,monospace;background:var(--bg2);
+    border:1px solid var(--line);border-radius:var(--radius-sm);padding:8px 10px;font-size:12.5px;color:var(--tx);margin:8px 0;}
+  .rule-box p{font-size:12.5px;color:var(--tx2);line-height:1.6;}
+  .rule-note{margin-top:12px;font-size:12px;color:var(--tx2);}
+
+  /* 池表格 */
+  .pool-title{font-weight:800;font-size:14px;display:flex;align-items:center;gap:8px;margin-bottom:4px;}
+  .pool-title .dot{width:10px;height:10px;border-radius:50%;}
+  .dot.atk{background:var(--warn);} .dot.def{background:var(--accent-l);} .dot.uni{background:var(--gold);}
+  .table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px;}
+  .table-wrap{overflow-x:auto;}
+  .table thead th{color:var(--tx2);font-weight:600;font-size:12px;text-align:right;
+    padding:10px 10px;border-bottom:1px solid var(--line);white-space:nowrap;}
+  .table thead th:first-child,.table thead th:nth-child(2){text-align:left;}
+  .rb-table thead th:nth-child(3){text-align:left;}
+  .table tbody td{padding:12px 10px;border-bottom:1px solid rgba(37,45,56,.5);text-align:right;white-space:nowrap;}
+  .table tbody td:first-child,.table tbody td:nth-child(2){text-align:left;}
+  .table tbody tr.best{background:linear-gradient(90deg,rgba(240,160,32,.10),transparent);}
+  .rank{font-weight:800;font-size:14px;}
+  .r1{color:var(--up);} .r2{color:var(--tx);} .r3{color:var(--tx);} .r4,.r5,.r6{color:var(--tx2);}
+  .etf-name{font-weight:700;}
+  .etf-code{color:var(--tx2);font-size:11.5px;margin-left:6px;}
+  .up{color:var(--up);font-weight:700;}
+  .down{color:var(--dn);font-weight:700;}
+  /* 双因子数据列统一配色：蓝色，不红不绿；负值同蓝但降透明度以保留方向暗示 */
+  .factor{color:var(--accent-l);font-weight:600;}
+  .factor.neg{opacity:.5;}
+  .score{font-weight:800;color:var(--gold);}
+  .state-tag{font-size:11px;padding:2px 8px;border-radius:var(--radius-sm);font-weight:700;}
+  .st-hold{background:rgba(240,160,32,.18);color:var(--gold);}
+  .st-target{background:rgba(30,199,125,.18);color:var(--dn);}
+  .st-sell{background:rgba(255,77,79,.18);color:var(--up);}
+  .st-fail{background:rgba(150,150,150,.20);color:var(--tx3);}
+  .disqualified{opacity:.45;}
+  .disqualified:hover{opacity:.72;}
+
+  /* 决策卡 */
+  .decision{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .dec-block{background:var(--panel2);border:1px solid var(--line);border-radius:var(--radius);padding:16px;}
+  .dec-block .lab{font-size:12px;color:var(--tx2);margin-bottom:8px;font-weight:600;}
+  .dec-block .act{font-size:18px;font-weight:800;margin-bottom:6px;}
+  .dec-block .det{font-size:13px;color:var(--tx);line-height:1.6;}
+
+  .btn{cursor:pointer;border:1px solid transparent;border-radius:var(--radius-sm);padding:0 16px;font-weight:600;font-size:12.5px;
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .2s;
+    height:36px;box-sizing:border-box;}
+  .btn-refresh{background:var(--accent);color:#fff;}
+  .btn-refresh:hover{background:var(--accent-h);transform:translateY(-1px);}
+  .btn-refresh:disabled{opacity:.6;cursor:not-allowed;transform:none;}
+  .btn-ghost{background:transparent;color:var(--tx2);border-color:var(--line);}
+  .btn-ghost:hover{background:var(--line);color:var(--tx);transform:translateY(-1px);}
+  .btn.spin svg{animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .btn-group{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+
+  .meta{display:flex;justify-content:space-between;color:var(--tx2);font-size:12px;
+    padding:12px 20px;background:var(--panel2);border-top:1px solid var(--line);flex-wrap:wrap;gap:6px;}
+  footer{text-align:center;color:var(--tx2);font-size:12px;padding:18px;}
+  footer .risk{color:var(--up);margin-top:6px;}
+
+  .toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);background:var(--dn);color:#06231a;
+    padding:10px 20px;border-radius:var(--radius);font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.4);
+    z-index:999;animation:slide .3s ease;}
+  @keyframes slide{from{opacity:0;transform:translate(-50%,-16px);}to{opacity:1;transform:translate(-50%,0);}}
+
+  /* 乖离率减仓预警（拥挤度管理） */
+  .note{font-size:12.5px;color:var(--tx2);line-height:1.45;margin-bottom:6px;}
+  .note a{text-decoration:none;}
+  .bias-w1{color:var(--gold);font-weight:700;}
+  .bias-w2{color:var(--warn);font-weight:700;}
+  .bias-w3{color:var(--up);font-weight:700;}
+  .badge.b-warn{background:rgba(255,77,79,.15);color:var(--up);border:1px solid rgba(255,77,79,.35);}
+  .badge.b-ok{background:rgba(30,199,125,.14);color:var(--dn);border:1px solid rgba(30,199,125,.3);}
+  .warn-tags{display:inline-flex;gap:5px;margin-left:8px;}
+  .warn-tags span{background:rgba(240,160,32,.14);color:var(--gold);border:1px solid rgba(240,160,32,.3);
+    padding:1px 6px;border-radius:var(--radius-sm);font-size:11px;font-weight:700;}
+  #warnTable{margin-top:4px;width:auto;min-width:min(100%,520px);margin-left:auto;margin-right:auto;border-collapse:collapse;}
+  #warnTable thead th,#warnTable tbody td{padding:7px 10px;white-space:nowrap;}
+  #warnTable thead th:nth-child(1),#warnTable td:nth-child(1){width:auto;text-align:left;}
+  #warnTable thead th:nth-child(2),#warnTable thead th:nth-child(3),#warnTable thead th:nth-child(4),
+  #warnTable tbody td:nth-child(2),#warnTable tbody td:nth-child(3),#warnTable tbody td:nth-child(4){width:1%;text-align:right;}
+  .warn-card .card-body{padding:13px 18px;}
+
+  /* 净值统计 */
+  .nav-params{display:flex;flex-wrap:nowrap;gap:12px;align-items:flex-end;}
+  .nav-params label{display:flex;flex-direction:column;font-size:11px;color:var(--tx2);gap:4px;width:125px;flex-shrink:0;}
+  .nav-params input,.nav-params select{background:var(--bg2);border:1px solid var(--line);color:var(--tx);
+    border-radius:var(--radius-sm);padding:0 9px;font-size:12.5px;width:100%;height:36px;box-sizing:border-box;min-width:0;}
+  /* 模式分段控件 */
+  .nav-seg{display:flex;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--bg2);height:36px;box-sizing:border-box;width:300px;flex-shrink:0;margin-left:auto;}
+  .nav-seg label{position:relative;cursor:pointer;margin:0;display:flex;align-items:stretch;flex:1;}
+  .nav-seg input{position:absolute;opacity:0;pointer-events:none;}
+  .nav-seg span{display:flex;align-items:center;justify-content:center;height:100%;width:100%;padding:0;font-size:12.5px;font-weight:600;color:var(--tx2);
+    transition:all .2s;border-left:1px solid var(--line);}
+  .nav-seg label:first-child span{border-left:none;}
+  .nav-seg input:checked + span{background:var(--gold);color:#1a1206;}
+  .nav-seg label:hover span{color:var(--tx);}
+  .nav-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 6px;}
+  .nav-summary{font-size:13px;color:var(--tx);}
+  .nav-tools{display:flex;gap:8px;align-items:center;width:300px;}
+  .nav-tools select{flex:1;background:var(--bg2);border:1px solid var(--line);color:var(--tx);border-radius:var(--radius-sm);padding:0 22px 0 9px;font-size:12px;height:36px;box-sizing:border-box;appearance:auto;}
+  .nav-tools .btn{flex:1;}
+  .nav-chart{margin:6px 0 4px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:8px;}
+  .nav-reb-head{display:flex;justify-content:space-between;align-items:center;margin:14px 0 6px;font-weight:700;font-size:13px;}
+  .nav-reb-btns{display:flex;gap:8px;width:300px;}
+  .nav-reb-btns .btn{flex:1;}
+  .rb-table{font-size:12.5px;margin-top:4px;}
+  .rb-row:hover{background:rgba(77,139,255,.08);}
+  .rb-detail{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--tx2);line-height:1.7;}
+  .rb-sub{color:var(--gold);font-weight:700;margin:6px 0 2px;}
+
+  @media(max-width:760px){
+    body{padding:10px;}
+    header h1{font-size:18px;}
+    .overview-grid,.rule-grid,.decision{grid-template-columns:1fr;}
+    .card-body{padding:14px;}
+    .table{font-size:12px;}
+    .table thead th,.table tbody td{padding:9px 6px;}
+    .btn-group{width:100%;justify-content:flex-start;}
+    .nav-params{flex-wrap:wrap;}
+    .nav-params label{width:calc(50% - 6px);}
+    .nav-seg{width:100%;margin-left:0;}
+    .cloud-bar{align-items:flex-start;}
+    .cloud-bar .cloud-actions{margin-left:0;width:100%;}
+    .cloud-bar .cloud-actions .btn{flex:1;}
+    .cm-box{max-height:calc(100vh - 32px);overflow:auto;}
+  }
+
+  /* 云同步状态条 + 登录弹窗（净值统计的参数区下方） */
+  .cloud-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;
+    padding:9px 14px;border:1px solid var(--line);border-radius:var(--radius-sm);
+    background:var(--panel2);font-size:12.5px;transition:border-color .2s;}
+  .cloud-dot{width:8px;height:8px;border-radius:50%;background:var(--tx3);flex:0 0 auto;}
+  .cloud-bar.on{border-color:rgba(30,199,125,.35);}
+  .cloud-bar.on .cloud-dot{background:var(--dn);}
+  .cloud-bar.pending{border-color:rgba(240,160,32,.35);}
+  .cloud-bar.pending .cloud-dot{background:var(--gold);animation:pulse 1s infinite;}
+  .cloud-bar.err{border-color:rgba(255,77,79,.35);}
+  .cloud-bar.err .cloud-dot{background:var(--up);}
+  .cloud-txt{color:var(--tx2);font-weight:600;line-height:1.5;flex:1;min-width:220px;}
+  .cloud-bar .cloud-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;}
+  .cloud-bar .btn{height:30px;padding:0 12px;font-size:12px;font-weight:600;}
+  /* 坑：本页 .btn 自带 display:inline-flex，类选择器优先级高于浏览器默认的
+     [hidden]{display:none}，于是 hidden 属性形同虚设 —— 实测未登录时四个按钮
+     全露出来了。这里把 hidden 的语义补回来。 */
+  .cloud-bar .btn[hidden],.cm-actions .btn[hidden],.cm-row .btn[hidden]{display:none;}
+
+  .cm-mask{position:fixed;inset:0;background:rgba(0,0,0,.62);display:none;
+    align-items:center;justify-content:center;z-index:1000;padding:16px;}
+  .cm-mask.show{display:flex;}
+  .cm-box{width:100%;max-width:384px;background:var(--panel);border:1px solid var(--line2);
+    border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);padding:20px;}
+  .cm-box h3{margin:0 0 4px;font-size:15px;font-weight:700;}
+  .cm-sub{margin:0 0 14px;font-size:11.5px;color:var(--tx3);line-height:1.6;}
+  /* 页签：分隔线用 gap + 容器底色实现，而不是给按钮加 border-left。
+     flex-basis:0 是按内容盒算的，带 border 的按钮会各多出 1px 边框宽，
+     实测三个页签变成 112.66/113.67/113.67 —— 正好差 1px 的错位。 */
+  .cm-tabs{display:flex;gap:1px;border:1px solid var(--line);border-radius:var(--radius-sm);
+    overflow:hidden;background:var(--line);margin-bottom:14px;}
+  .cm-tabs button{flex:1;border:0;background:var(--bg2);color:var(--tx2);font:inherit;
+    font-size:12.5px;font-weight:600;padding:8px 0;cursor:pointer;transition:all .15s;}
+  .cm-tabs button:hover{color:var(--tx);}
+  .cm-tabs button.active{background:var(--accent);color:#fff;}
+  .cm-tabs button:disabled{opacity:.55;cursor:not-allowed;}
+  .cm-field{display:flex;flex-direction:column;gap:5px;margin-bottom:11px;}
+  .cm-field label{font-size:11.5px;color:var(--tx2);}
+  .cm-field input{background:var(--bg2);border:1px solid var(--line);color:var(--tx);
+    border-radius:var(--radius-sm);padding:0 10px;font-size:13px;height:36px;
+    box-sizing:border-box;font-family:inherit;width:100%;min-width:0;}
+  .cm-field input:focus{outline:none;border-color:var(--accent);}
+  .cm-row{display:flex;gap:8px;align-items:flex-end;}
+  .cm-row .cm-field{flex:1;}
+  .cm-row .btn{flex:0 0 auto;height:36px;white-space:nowrap;}
+  .cm-actions{display:flex;gap:8px;margin-top:16px;}
+  .cm-actions .btn{flex:1;height:38px;}
+  /* 覆盖确认弹窗：焦点环统一成主题色，不要浏览器默认那个。
+     起因是把焦点放在「取消」上（破坏性操作不默认聚焦确认），但 UA 默认的
+     :focus-visible 环在本页深色面板上画的是 rgb(238,238,238) 亮白，
+     结果「取消」比实心的「确认上传」还抢眼，主次关系反过来。
+     本页既有约定是「用主题色表达焦点」（见上面的 .cm-field input:focus），这里对齐它。 */
+  #cfMask .btn:focus-visible{outline:2px solid var(--accent-tx);outline-offset:2px;}
+  .cm-foot{margin-top:10px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+  .cm-msg{min-height:17px;font-size:12px;margin-top:10px;color:var(--tx2);line-height:1.55;}
+  .cm-msg.err{color:var(--up);font-weight:600;}
+  .cm-msg.ok{color:var(--dn);font-weight:600;}
+  .cm-link{background:none;border:0;color:var(--accent-tx);font:inherit;font-size:11.5px;
+    cursor:pointer;padding:0;text-decoration:underline;}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>双因子轮动策略</h1>
+    <div class="subtitle">动量因子（20日BIAS） + 风险因子（60日波动率） · 12只ETF 统一池 · 排名打分法 · 实时行情</div>
+  </header>
+
+  <div class="disclaimer">
+    本页面数据仅为个人学习研究示例，<b>不构成任何投资建议</b>！投资有风险，入市需谨慎。
+  </div>
+
+  <div class="status-bar" id="statusBar">
+    <span class="dot-status" id="statusDot"></span>
+    <span id="statusText">准备就绪，正在初始化…</span>
+  </div>
+
+  <!-- 策略概览 -->
+  <div class="card">
+    <div class="card-head">
+      <h2>📊 策略概览</h2>
+      <span class="tag" id="updateTime">--</span>
+    </div>
+    <div class="card-body">
+      <div class="overview-grid single">
+        <div class="ov-item single">
+          <div class="ov-line">
+            <span class="ov-label">现有持仓</span>
+            <span class="ov-value" id="ovHoldings">--</span>
+          </div>
+          <div class="ov-line">
+            <span class="ov-label">下次调仓日</span>
+            <span class="ov-value" id="ovNextRebal">--</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 统一池 -->
+  <div class="card">
+    <div class="card-head">
+      <h2><span class="pool-title"><span class="dot uni"></span>统一池 · 12 ETF</span></h2>
+      <span class="tag">动量(BIAS) + 低波动(Vol) 双因子排名打分</span>
+      <div class="btn-group">
+        <button class="btn btn-refresh" id="refreshBtn" onclick="manualRefresh()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+          </svg>立即刷新
+        </button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="table-wrap">
+      <table class="table">
+        <thead><tr>
+          <th>排名</th><th>标的</th><th>现价<small style="display:block;font-size:.64em;font-weight:400;opacity:.55;margin-top:2px">实际·不复权</small></th><th>MA20<small style="display:block;font-size:.64em;font-weight:400;opacity:.55;margin-top:2px">后复权</small></th>
+          <th>BIAS20</th><th>BIAS得分</th><th>Vol60</th><th>波动得分</th><th>250日涨幅</th><th>综合得分</th><th>状态</th>
+        </tr></thead>
+        <tbody id="poolBody"></tbody>
+      </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 双因子规则 -->
+  <div class="card">
+    <div class="card-head"><h2>🧮 双因子定义与打分</h2><span class="tag">权重/阈值可在源码中调整</span></div>
+    <div class="card-body">
+      <div class="rule-grid">
+        <div class="rule-box">
+          <h3>因子一 · 动量（20日BIAS，果仁口径）</h3>
+          <div class="formula">BIAS20 = 后复权收盘价 / 20日复权均价 − 1</div>
+          <p>20日复权均价 = 近20日后复权收盘价的算术平均（复权版MA20）。衡量价格相对20日均线的偏离，反映短期趋势强度。BIAS 越高，动量越强、趋势越向上。与 (现价−MA20)/MA20 数学等价，但须用后复权价以避免分红除息跳变。</p>
+        </div>
+        <div class="rule-box">
+          <h3>因子二 · 风险（60日波动率，果仁口径）</h3>
+          <div class="formula">Vol60 = stdev(当日涨幅, 60) × √60</div>
+          <p>当日涨幅 = 后复权收盘价 / 前收盘价 − 1；取近60个日收益的样本标准差（果仁 stdev 为样本标准差，除以 N−1，而非总体标准差 ÷N），再乘 √60 为果仁自定义年化尺度（非标准 √252，数值约为标准年化的 0.49 倍）。越低代表走势越稳健，轮动中优先选低波动标的以控制回撤。</p>
+        </div>
+      </div>
+      <div class="rule-box" style="margin-top:14px;">
+          <h3>综合得分 · 排名打分法（各 1~12 分相加）</h3>
+          <div class="formula">综合得分 = BIAS排名得分 + 波动率排名得分（满分 24）</div>
+          <p>两因子各自在全池内独立排名：<strong>BIAS20 越大 → 排名越靠前 → 得分越高</strong>（第1名12分 … 第12名1分）；<strong>Vol60 越小 → 排名越靠前 → 得分越高</strong>（第1名12分 … 第12名1分）。将两项排名得分相加得综合得分，按综合得分<strong>降序</strong>排列，优先持有综合得分最高者。</p>
+        <p class="rule-note">资格门槛：仅 <strong>250日累计涨跌幅 &gt; 0</strong> 的 ETF 进入候选，参与上述排名打分与前5买入；≤0 者整行置灰标「不达标」，不参与轮动。</p>
+        <p class="rule-note">开平规则（示例）：目标持仓为综合得分<strong>前5名（同时持有）</strong>。当前持仓中跌出前5的→卖出；前5中尚未持有的→买入；仍在前5的→继续持有。阈值与规则细节可在源码 <code>calcDecision()</code> 调整。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 今日操作结论 -->
+  <div class="card">
+    <div class="card-head">
+      <h2>🎯 今日操作结论</h2>
+    </div>
+    <div class="card-body">
+      <div class="decision">
+        <div class="dec-block">
+          <div class="lab">当前持仓</div>
+          <div class="act" id="decHold">--</div>
+          <div class="det" id="decHoldDet">--</div>
+        </div>
+        <div class="dec-block">
+          <div class="lab">今日操作</div>
+          <div class="act" id="decAct">--</div>
+          <div class="det" id="decDet">--</div>
+        </div>
+      </div>
+      <div class="rule-note" style="margin-top:12px;">
+        说明：本页实时拉取行情并计算双因子，已部署为公开网址——手机（外网）、公司电脑或家庭网络直接打开网址、点「立即刷新」即可获取最新排名（无定时自动刷新，仅手动刷新）。数据通道（优先级）：<strong>浏览器直连东财</strong> → 网络封锁东财则走<strong>腾讯财经</strong>兜底（不同域名）→ 公共 CORS 代理 → 仍全部失败则加载与网站同源托管的<strong>真实行情快照</strong>（data.json，由 AShareHub 后复权日线生成，绕过所有网络封锁，非假数）。<b>现价展示不复权实际价</b>（与行情软件一致）；BIAS20/Vol60 按果仁口径用<strong>后复权</strong>计算，故现价与 MA20 口径不同属正常（无分红标的如黄金，不复权价与后复权价等价）。持仓为手动标记，按真实持仓修改 <code>etfData</code> 的 <code>holding</code> 字段即可。
+      </div>
+    </div>
+    <div class="meta">
+      <span>数据来源：<span id="dataSrc">--</span></span>
+      <span>最后更新：<span id="dataTime">--</span></span>
+    </div>
+  </div>
+
+  <!-- 乖离率减仓预警（拥挤度管理） -->
+  <div class="card warn-card">
+    <div class="card-head">
+      <h2>⚠️ 乖离率减仓预警</h2>
+      <span class="tag" id="warnDate">--</span>
+    </div>
+    <div class="card-body">
+      <p class="note">基于张翼轸 BIAS 思路（<a href="https://mp.weixin.qq.com/s/qpnlpfEOiI-Vi3eGx8Pmvg" target="_blank" rel="noopener" style="color:var(--accent)">原文</a>）：左侧减仓预警，非逃顶 — <b>BIAS20&gt;10%</b> 减½、<b>&gt;15%</b> 再减½、<b>BIAS60&gt;20%</b> 再减½。</p>
+      <table class="table" id="warnTable"><!-- renderWarn() 填充 --></table>
+    </div>
+  </div>
+
+  <!-- 净值统计 -->
+  <div class="card">
+    <div class="card-head">
+      <h2>📈 净值统计</h2>
+      <span class="tag">假设执行：起始日等权买前5 · 每N交易日全清仓再等权买 · 万1佣金</span>
+    </div>
+    <div class="card-body">
+      <div class="nav-params">
+        <label>起始日<input type="date" id="navStart" onchange="onNavParamChange(event)"></label>
+        <label>本金(¥)<input type="number" id="navCapital" value="20000" min="1000" step="1000" onchange="onNavParamChange()"></label>
+        <label>调仓间隔(交易日)<input type="number" id="navRebal" value="10" min="1" step="1" onchange="onNavParamChange()"></label>
+        <label>佣金(万分之)<input type="number" id="navComm" value="1" min="0" step="0.1" onchange="onNavParamChange()"></label>
+        <label>对比基准<select id="navBench" onchange="onNavParamChange()">
+          <option value="cyb">创业板指</option>
+          <option value="a500">中证A500</option>
+          <option value="hs300">沪深300</option>
+          <option value="sp500">标普500ETF</option>
+          <option value="ndx">纳斯达克100ETF</option>
+        </select></label>
+        <div class="nav-seg">
+          <label><input type="radio" name="navMode" value="auto" onchange="onNavParamChange()"><span>自动模拟</span></label>
+          <label><input type="radio" name="navMode" value="manual" onchange="onNavParamChange()"><span>手动登记</span></label>
+        </div>
+      </div>
+      <!-- 云同步：登录后把上面的参数与下面的调仓登记存到云端（每账号一份，仅本人可见） -->
+      <div class="cloud-bar" id="cloudBar">
+        <span class="cloud-dot" id="cloudDot"></span>
+        <span class="cloud-txt" id="cloudTxt">正在检查云同步状态…</span>
+        <span class="cloud-actions">
+          <button type="button" class="btn btn-ghost" id="cloudLoginBtn" hidden>登录云同步</button>
+          <button type="button" class="btn btn-ghost" id="cloudPushBtn" hidden>上传本机 → 云端</button>
+          <button type="button" class="btn btn-ghost" id="cloudPullBtn" hidden>从云端拉取</button>
+          <button type="button" class="btn btn-ghost" id="cloudOutBtn" hidden>退出登录</button>
+        </span>
+      </div>
+      <div class="nav-toolbar">
+        <div id="navSummary" class="nav-summary">--</div>
+        <div class="nav-tools">
+          <select id="navChartMode">
+            <option value="norm">归一化(起点=1)</option>
+            <option value="abs">绝对金额(¥)</option>
+          </select>
+          <button class="btn btn-refresh" id="navExportBtn">导出CSV</button>
+        </div>
+      </div>
+      <div class="nav-chart" id="navChart"></div>
+      <div class="nav-reb-head">
+        <span>调仓记录</span>
+        <span class="nav-reb-btns">
+          <button class="btn btn-refresh" onclick="navRegisterRebal()">登记本次调仓</button>
+          <button class="btn btn-ghost" onclick="navClearManual()">清空登记</button>
+        </span>
+      </div>
+      <div class="table-wrap" id="navRebTable"></div>
+      <p class="rule-note" style="margin-top:10px;">说明：本功能基于已有K线<strong>确定性推演</strong>策略净值（非实时下单）。自动模拟按规则逐日复现；手动登记模式下，你盘后实际调仓后点「登记本次调仓」，页面据登记日当时前5生成真实曲线（假设严格按策略执行）与模拟曲线对比。净值用后复权价计算，除息日连续、反映真实持有收益。基准取自同源快照 data.json（截至快照日）。CSV 含每日净值与每笔买卖明细。</p>
+    </div>
+  </div>
+
+  <footer>
+    <div>© 2026 双因子轮动 · 个人量化研究 · <span id="appVer"></span> · 构建 <span id="buildTime"></span></div>
+    <div class="risk">风险提示：本策略仅供参考，投资有风险，入市需谨慎。</div>
+  </footer>
+</div>
+
+<div class="toast" id="toast" style="display:none;"></div>
+
+<!-- 云同步登录弹窗（邮箱登录 / 验证码登录 / 注册 / 重置密码） -->
+<div class="cm-mask" id="cmMask">
+  <div class="cm-box" role="dialog" aria-modal="true" aria-label="云同步登录">
+    <h3>云同步登录</h3>
+    <p class="cm-sub">登录后，调仓参数与手动登记记录会存在云端，换设备也能取回。仅本人可见。<br>
+      注：邮箱验证只在官方发布域名下可用，本地预览与 GitHub Pages 无法完成登录。</p>
+
+    <div class="cm-tabs">
+      <button type="button" id="cmTabPwd" class="active">密码登录</button>
+      <button type="button" id="cmTabOtp">验证码登录</button>
+      <button type="button" id="cmTabSignup">注册</button>
+    </div>
+
+    <!-- 密码登录（用 form 包起来：回车可提交、密码管理器可接管；提交处理里 preventDefault） -->
+    <form id="cmPanelPwd">
+      <div class="cm-field"><label>邮箱</label><input type="email" id="cmPwdEmail" autocomplete="username" placeholder="you@example.com"></div>
+      <div class="cm-field"><label>密码</label><input type="password" id="cmPwdPass" autocomplete="current-password" placeholder="登录密码"></div>
+      <div class="cm-actions"><button type="submit" class="btn btn-refresh" id="cmPwdSubmit">登录</button></div>
+      <div class="cm-foot"><button type="button" class="cm-link" id="cmPwdForgot">忘记密码？</button></div>
+    </form>
+
+    <!-- 验证码登录（取码按钮必须是 type=button，否则会被当提交） -->
+    <form id="cmPanelOtp" hidden>
+      <div class="cm-field"><label>邮箱</label><input type="email" id="cmOtpEmail" autocomplete="email" placeholder="you@example.com"></div>
+      <div class="cm-row">
+        <div class="cm-field"><label>邮箱验证码</label><input type="text" id="cmOtpCode" inputmode="numeric" autocomplete="one-time-code" placeholder="6 位验证码"></div>
+        <button type="button" class="btn btn-ghost" id="cmOtpSend">获取验证码</button>
+      </div>
+      <div class="cm-actions"><button type="submit" class="btn btn-refresh" id="cmOtpSubmit">登录</button></div>
+    </form>
+
+    <!-- 注册（邮箱注册必须带密码） -->
+    <form id="cmPanelSignup" hidden>
+      <div class="cm-field"><label>邮箱</label><input type="email" id="cmSuEmail" autocomplete="email" placeholder="you@example.com"></div>
+      <div class="cm-row">
+        <div class="cm-field"><label>邮箱验证码</label><input type="text" id="cmSuCode" inputmode="numeric" autocomplete="one-time-code" placeholder="6 位验证码"></div>
+        <button type="button" class="btn btn-ghost" id="cmSuSend">获取验证码</button>
+      </div>
+      <div class="cm-field"><label>设置密码</label><input type="password" id="cmSuPass" autocomplete="new-password" placeholder="至少 6 位"></div>
+      <div class="cm-actions"><button type="submit" class="btn btn-refresh" id="cmSuSubmit">注册并登录</button></div>
+    </form>
+
+    <!-- 重置密码 -->
+    <form id="cmPanelReset" hidden>
+      <div class="cm-field"><label>邮箱</label><input type="email" id="cmResetEmail" autocomplete="email" placeholder="you@example.com"></div>
+      <div class="cm-row">
+        <div class="cm-field"><label>邮箱验证码</label><input type="text" id="cmResetCode" inputmode="numeric" placeholder="6 位验证码"></div>
+        <button type="button" class="btn btn-ghost" id="cmResetSend">获取验证码</button>
+      </div>
+      <div class="cm-field"><label>新密码</label><input type="password" id="cmResetPass" autocomplete="new-password" placeholder="至少 6 位"></div>
+      <div class="cm-actions">
+        <button type="submit" class="btn btn-refresh" id="cmResetSubmit">重置并登录</button>
+        <button type="button" class="btn btn-ghost" id="cmResetBack">返回</button>
+      </div>
+    </form>
+
+    <div class="cm-msg" id="cmMsg"></div>
+    <div class="cm-foot"><button type="button" class="cm-link" id="cmCloseBtn">关闭</button></div>
+  </div>
+</div>
+
+<!-- 覆盖确认弹窗（「上传本机 → 云端」前的二次确认）
+     样式全部复用上面的 .cm-mask / .cm-box / .cm-actions，零新增 CSS 规则。
+     只有会造成远端数据丢失的路径才走它（详见 cfAsk 的注释）。
+     按钮顺序是「取消在左、确认在右」——故意不同于本页登录弹窗把主操作放左边的习惯，
+     破坏性操作不放在用户习惯点击的位置。 -->
+<div class="cm-mask" id="cfMask">
+  <div class="cm-box" role="dialog" aria-modal="true" aria-label="覆盖确认">
+    <h3 id="cfTitle">上传会覆盖云端数据</h3>
+    <p class="cm-sub" id="cfSub"></p>
+    <div class="cm-msg" id="cfBody"></div>
+    <div class="cm-actions">
+      <button type="button" class="btn btn-ghost" id="cfCancel">取消</button>
+      <button type="button" class="btn btn-refresh" id="cfOk">确认上传</button>
+    </div>
+  </div>
+</div>
+
+<!-- WorkBuddy 云服务 SDK（CDN 形态：纯 HTML 无构建步骤） -->
+<script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
+<script>
+/* 主题取色：从 theme.css 的 :root 读变量，保证与全站配色一致 */
+const QC=(n)=>getComputedStyle(document.documentElement).getPropertyValue('--'+n).trim();
+
+/* 构建版本：APP_VERSION 手动维护；BUILD_TIME 占位符由 _push_github.js 部署时替换为真实时间，本地预览时显示本地时间 */
+const APP_VERSION = "v2026.08.12";
+const BUILD_TIME = "2026/9/27 17:03:36";
+/* 强制破除 index.html 自身 CDN/浏览器缓存：首次访问若 URL 没有 v=xxx 参数，自动跳转到带 BUILD_TIME 的版本。
+   GitHub Pages 对带不同 query string 的 URL 会重新回源；后续可用带 v 的书签固定版本。 */
+(function(){
+  try{
+    const u=new URL(location.href);
+    if(!u.searchParams.get('v')){
+      u.searchParams.set('v', BUILD_TIME && BUILD_TIME.indexOf('__')!==0 ? BUILD_TIME : String(Date.now()));
+      location.replace(u.toString());
+    }
+  }catch(e){}
+})();
+/* ===== 标的清单：12只ETF（统一池，不再区分进攻/防守）=====
+   字段：secid 东财 secid（market.code，1=上交所 0=深交所）
+        code 代码 name 名称 holding 是否当前持仓 holdDays 已持有天数
+   运行时从东方财富拉后复权日线，自动计算 price / ma20 / vol60（果仁口径）。
+   持仓为手动标记（页面无法读取你的实盘账户），按真实持仓修改 holding 字段。   */
+const etfData = [
+  {secid:'0.159597',code:'159597',name:'创业板成长ETF',holding:false,holdDays:0},
+  {secid:'0.159532',code:'159532',name:'中证2000ETF', holding:false,holdDays:0},
+  {secid:'1.588000',code:'588000',name:'科创50ETF',   holding:false,holdDays:0},
+  {secid:'0.159696',code:'159696',name:'纳指100ETF',  holding:false,holdDays:0},
+  {secid:'1.513000',code:'513000',name:'日经225ETF',  holding:false,holdDays:0},
+  {secid:'0.159980',code:'159980',name:'有色ETF',     holding:false,holdDays:0},
+  {secid:'1.563350',code:'563350',name:'中证A50ETF',  holding:false,holdDays:0},
+  {secid:'1.512040',code:'512040',name:'价值ETF',     holding:false,holdDays:0},
+  {secid:'1.515180',code:'515180',name:'红利ETF',     holding:false,holdDays:0},
+  {secid:'0.159612',code:'159612',name:'标普500ETF',  holding:false,holdDays:0},
+  {secid:'1.518880',code:'518880',name:'黄金ETF',     holding:false,holdDays:0},
+  {secid:'0.159985',code:'159985',name:'豆粕ETF',     holding:false,holdDays:0},
+];
+
+/* 示例数据兜底（网络/接口失败时使用，非实时；果仁 Vol60 口径）*/
+const EXAMPLE = {
+  '159597':{price:1.250,ma20:1.210,vol60:13.9},
+  '159532':{price:1.020,ma20:1.040,vol60:15.2},
+  '588000':{price:0.980,ma20:0.965,vol60:13.1},
+  '159696':{price:1.520,ma20:1.480,vol60:9.0},
+  '513000':{price:1.430,ma20:1.410,vol60:7.9},
+  '159980':{price:1.180,ma20:1.150,vol60:10.9},
+  '563350':{price:1.320,ma20:1.300,vol60:7.1},
+  '512040':{price:1.010,ma20:1.005,vol60:6.7},
+  '515180':{price:1.340,ma20:1.320,vol60:6.1},
+  '159612':{price:1.610,ma20:1.580,vol60:7.5},
+  '518880':{price:5.620,ma20:5.500,vol60:5.5},
+  '159985':{price:2.050,ma20:2.080,vol60:9.7},
+};
+
+const N = etfData.length;
+const etfByCode = {}; etfData.forEach(e=>etfByCode[e.code]=e);   // code -> 对象 映射（模拟引擎用）
+
+/* 基准 secid 映射（用于实时升级基准 klines，保持与 gen_snapshot.py 一致） */
+const BENCH_SECID = {
+  a500: '1.000510',   // 中证A500
+  cyb:  '0.399606',   // 创业板指（页面显示"创业板指"，快照用 399606）
+  hs300:'1.000300',   // 沪深300
+  sp500:'1.513500',   // 标普500ETF(基准)
+  ndx:  '1.513100',   // 纳斯达克100ETF(基准)
+};
+const BENCH_LABEL = {
+  a500:'中证A500', cyb:'创业板指', hs300:'沪深300', sp500:'标普500ETF', ndx:'纳斯达克100ETF'
+};
+
+/* ===== 数据获取：东方财富后复权日线（fetch 主 + JSONP 兜底）===== */
+const EM_BASE = 'https://push2his.eastmoney.com/api/qt/stock/kline/get';
+function buildUrl(secid, fqt=2){
+  return `${EM_BASE}?fields1=f1,f2,f3&fields2=f51,f52,f53&klt=101&fqt=${fqt}&secid=${secid}&beg=0&end=20500101`;
+}
+async function fetchViaProxy(secid){            // 本机 server.js 代理（同源最稳，预览面板也能用）
+  try{
+    const r = await fetch('/api/kline?secid='+encodeURIComponent(secid), {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j = await r.json();
+    const kl = j && j.data && j.data.klines;
+    if(!Array.isArray(kl) || !kl.length) throw new Error('empty');
+    return kl;
+  }catch(e){ return null; }
+}
+function isLocalhost(){
+  const h = location.hostname;
+  return h === 'localhost' || h === '127.0.0.1' || h === '';
+}
+// 公共/云端 CORS 代理：由代理服务器侧拉东财，绕过本机/公司网络对 eastmoney 的封锁。
+// 如需更高可靠性，可换成你自己的云端代理（如 Cloudflare Worker）地址。
+const PUBLIC_PROXIES = [
+  'https://api.codetabs.com/v1/proxy/?quest=',
+  'https://api.allorigins.win/raw?url=',
+  'https://corsproxy.io/?url='
+];
+// 自建云端代理：部署 Cloudflare Worker 后，在网址后加 ?proxy=https://你的.workers.dev/ 即可临时接入
+const CLOUD_PROXY = new URLSearchParams(location.search).get('proxy') || '';
+async function fetchKline(secid, fqt=2){
+  if(isLocalhost()){
+    const viaP = await fetchViaProxy(secid);   // 本机 server.js（仅 localhost 生效）
+    if(viaP) return viaP;
+  }
+  const url = buildUrl(secid, fqt);
+  // 0) 自建云端代理（?proxy= 传入，服务器端拉东财，绕过本机网络封锁，最稳）
+  if(CLOUD_PROXY){
+    try{
+      const r = await fetch(CLOUD_PROXY + '?url=' + encodeURIComponent(url), {cache:'no-store'});
+      if(r.ok){ const j = await r.json(); const kl = j && j.data && j.data.klines; if(Array.isArray(kl) && kl.length) return kl; }
+    }catch(e){}
+  }
+  // 1) 浏览器直连东财（CORS=*，网络可达时最快）
+  try{
+    const r = await fetch(url, {mode:'cors', cache:'no-store'});
+    if(r.ok){ const j = await r.json(); const kl = j && j.data && j.data.klines; if(Array.isArray(kl) && kl.length) return kl; }
+  }catch(e){}
+  // 2) 公共 CORS 代理（兜底）
+  for(const base of PUBLIC_PROXIES){
+    try{
+      const r = await fetch(base + encodeURIComponent(url), {cache:'no-store'});
+      if(r.ok){ const j = await r.json(); const kl = j && j.data && j.data.klines; if(Array.isArray(kl) && kl.length) return kl; }
+    }catch(e){}
+  }
+  // 3) 腾讯财经兜底（不同域名，公司网络可能未封 eastmoney）
+  try{ const t = await jsonpTencent(secid, fqt); if(t) return t; }catch(e){}
+  // 4) JSONP 兜底（file:// 等 fetch 被拦时）
+  try{ return await jsonpKline(url); }catch(e){ return null; }
+}
+function tencentCode(secid){           // 东财 secid(1.518880) → 腾讯代码(sh518880)
+  const [m, c] = secid.split('.');
+  return (m === '1' ? 'sh' : 'sz') + c;
+}
+function jsonpTencent(secid, fqt=2){   // 腾讯财经日线(JSONP, _var 回调)，不同域名，绕过公司防火墙对 eastmoney 的封锁
+  return new Promise((resolve,reject)=>{
+    const code = tencentCode(secid);
+    const rehab = fqt === 2 ? 2 : 0;   // 2=后复权 0=不复权
+    const vname = 'kl' + Math.random().toString(36).slice(2,9);
+    const s = document.createElement('script');
+    const timer = setTimeout(()=>{ cleanup(); reject(new Error('tencent timeout')); }, 12000);
+    function cleanup(){ clearTimeout(timer); if(s.parentNode) s.parentNode.removeChild(s); delete window[vname]; }
+    window[vname] = (data)=>{ cleanup(); try{
+      const arr = data && data.data && data.data[code] && data.data[code].kline;
+      resolve(Array.isArray(arr) ? arr : null);
+    }catch(e){ resolve(null); } };
+    s.onerror = ()=>{ cleanup(); reject(new Error('tencent err')); };
+    s.src = `https://web.ifzq.gtimg.cn/appstuff/app/kline/mkline?param=${code},day,${rehab},,,320&_var=${vname}`;
+    document.body.appendChild(s);
+  });
+}
+function jsonpKline(url){
+  return new Promise((resolve,reject)=>{
+    const cb = '__em' + Math.random().toString(36).slice(2,9);
+    const s = document.createElement('script');
+    const timer = setTimeout(()=>{ cleanup(); reject(new Error('timeout')); }, 15000);
+    function cleanup(){ clearTimeout(timer); if(s.parentNode) s.parentNode.removeChild(s); delete window[cb]; }
+    window[cb] = (data)=>{ cleanup(); resolve(data && data.data ? data.data.klines : null); };
+    s.onerror = ()=>{ cleanup(); reject(new Error('jsonp error')); };
+    s.src = url + (url.indexOf('?')>=0?'&':'?') + 'cb=' + cb;
+    document.body.appendChild(s);
+  });
+}
+
+/* K线合并：用新拉到的实时 klines 增量/覆盖快照基准序列，key=normalizeDate(日期)，保留最近320条 */
+function mergeKlines(oldArr, newArr){
+  const map = new Map();
+  for(const k of oldArr || []){
+    const p = k.split(',');
+    const d = normalizeDate(p[0]);
+    if(d) map.set(d, k);
+  }
+  for(const k of newArr || []){
+    const p = k.split(',');
+    const d = normalizeDate(p[0]);
+    if(d) map.set(d, k);
+  }
+  return Array.from(map.entries())
+    .sort((a,b)=>a[0].localeCompare(b[0]))
+    .map(e=>e[1])
+    .slice(-320);
+}
+
+/* ===== 真实快照兜底（同源 data.json，绕过所有网络封锁）=====
+   当东财/腾讯/公共代理全部不可达（如某些家庭/公司 WiFi 屏蔽金融域名）时，
+   页面回退到与网站同源托管的真实行情快照 data.json（由 gen_snapshot.py 生成：
+   AShareHub 主源（云端拉数据，家庭宽带直连可用，不受本地封东财影响），ETF 历史充足故 250日涨幅为真实满250日；
+   现价取自 AShareHub etf_daily 最新不复权实际价），
+   而不是假的示例死值。                                       */
+let SNAP = null;       // {code: [kline...]}  历史序列（后复权，用于因子/净值）
+let SNAP_PRICES = null;// {code: 最新不复权实际价}  用于「现价」列展示
+let SNAP_DATE = '';    // 快照生成日期
+let SNAP_SOURCE = '';  // 快照数据源标识（data.json 的 source 字段，如 asharehub_hfq / baostock / sina_raw）
+let SNAP_BENCHMARKS = null; // {bid:{label,klines:[]}}  快照中的基准数据（单独保存，SNAP 只存 klines）
+async function loadSnapshot(){
+  if(SNAP) return SNAP;
+  try{
+    const r = await fetch('data.json?v='+Date.now(), {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j = await r.json();
+    SNAP = (j && j.klines) ? j.klines : null;
+    SNAP_PRICES = (j && j.prices) ? j.prices : null;
+    SNAP_BENCHMARKS = (j && j.benchmarks) ? j.benchmarks : null;
+    SNAP_DATE = (j && j.generated) ? j.generated : '';
+    SNAP_SOURCE = (j && j.source) ? j.source : '';
+    return SNAP;
+  }catch(e){ SNAP = null; SNAP_PRICES = null; SNAP_BENCHMARKS = null; return null; }
+}
+
+/* 据 data.json 的 source 字段返回状态栏展示的快照数据源名称（避免硬编码 BaoStock 造成的误导） */
+function snapSrcLabel(){
+  const s = (SNAP_SOURCE||'').toLowerCase();
+  if(s.includes('asharehub')) return 'AShareHub';
+  if(s.includes('baostock')) return 'BaoStock';
+  if(s.includes('sina'))     return '新浪';
+  return '行情';
+}
+
+/* 纯函数：由后复权收盘价序列计算双因子，供实时计算与净值模拟复用 */
+function calcFactors(closes){
+  const n = closes.length;
+  if(n < 61) return {valid:false};              // 至少需 61 个交易日（MA60 需 ≥60 根后复权收盘价）
+  const recent = closes.slice(-70);
+  const nR = recent.length;
+  const last = recent[nR-1];
+  const ma20 = recent.slice(-20).reduce((a,b)=>a+b,0)/Math.min(20,nR);
+  const bias20 = (last/ma20 - 1)*100;
+  const ma60 = recent.slice(-60).reduce((a,b)=>a+b,0)/Math.min(60,nR);
+  const bias60 = (last/ma60 - 1)*100;
+  // 250日涨幅：AShareHub 主源历史充足为真实满250日；退化时按实际可用天数 min(250,n-1) 计算
+  const chgDays = Math.min(250, n-1);
+  const chg250 = (closes[n-1] / closes[n-1-chgDays] - 1) * 100;
+  const rets=[];
+  for(let i=1;i<recent.length;i++) rets.push(recent[i]/recent[i-1]-1);
+  const volRet = rets.slice(-Math.min(60, rets.length));
+  if(volRet.length < 2) return {valid:false};
+  const mean = volRet.reduce((a,b)=>a+b,0)/volRet.length;
+  // 果仁 stdev 为样本标准差（÷N−1）
+  const variance = volRet.reduce((a,b)=>a+(b-mean)*(b-mean),0)/(volRet.length-1);
+  const vol60 = Math.sqrt(variance) * Math.sqrt(60) * 100;
+  return {valid:true, ma20, bias20, ma60, bias60, chg250, chgDays, vol60};
+}
+
+/* ===== 由后复权日线计算双因子（果仁口径），并缓存完整序列供净值模拟 ===== */
+function computeFromKlines(e, klines){
+  // 对齐 (date, close)，过滤无效值
+  // 统一日期为 YYYYMMDD：快照(data.json)本就是该格式；东财/腾讯实时 K 线为 YYYY-MM-DD（带横杠）。
+  // 若不归一，实时数据写入 e.fullDates 后整张日历带横杠，与锚点 '20260811' 的字符串比较全部错位，
+  // 导致自动模式把起点误判为"晚于最新行情"而回退到最新日，8/11 调仓在历史模式下消失。
+  const pairs = klines.map(k=>{ const p=k.split(','); return {d:normalizeDate(p[0]), c:parseFloat(p[2])}; })
+                      .filter(x=>!isNaN(x.c) && x.d);
+  const dates = pairs.map(x=>x.d);
+  const closes = pairs.map(x=>x.c);
+  e.fullDates = dates;          // 完整日期序列（YYYYMMDD，升序）
+  e.fullCloses = closes;        // 完整后复权收盘价序列（与 dates 对齐）
+  e.klineCnt = dates.length;    // 供前端区分「数据不足」与「获取失败」两种无效原因
+  const f = calcFactors(closes);
+  if(!f.valid){ e.valid=false; return; }
+  e.valid = true;
+  e.adjClose = closes[closes.length-1];   // 后复权最新收盘价（BIAS20 计算，与 ma20 同口径）
+  e.price = e.adjClose;                   // 初始后复权价；fetchAll 成功后会被 fqt=0 实际价覆盖(display)
+  e.ma20 = f.ma20;
+  e.bias20 = f.bias20;
+  e.ma60 = f.ma60;
+  e.bias60 = f.bias60;
+  e.chg250 = f.chg250;
+  e.chgDays = f.chgDays;
+  e.vol60 = f.vol60;
+}
+
+async function fetchAll(){
+  // PHASE 1：同源 data.json 行情快照优先（家里网络必成功，秒开渲染）；数据源由 gen_snapshot.py 决定（当前 AShareHub 后复权）
+  const snap = await loadSnapshot();
+  let snapCnt = 0;
+  etfData.forEach(e=>{
+    const sk = snap && snap[e.code];
+    if(sk && sk.length){
+      computeFromKlines(e, sk);
+      e.live = false; e.snap = true;            // 标记为快照（真数据，来源见 SNAP_SOURCE）
+      // 现价：优先用快照里单独存的不复权实际价（腾讯批量行情），避免后复权序列虚高
+      try{
+        e.price = (SNAP_PRICES && SNAP_PRICES[e.code] != null) ? SNAP_PRICES[e.code]
+                  : sk.map(x=>parseFloat(x.split(',')[2])).slice(-1)[0];
+      }catch(_){}
+      snapCnt++;
+    }else{
+      const ex = EXAMPLE[e.code];               // 连快照也没有 → 回退示例数据(假)
+      if(ex){ e.price=ex.price; e.adjClose=ex.price; e.ma20=ex.ma20; e.vol60=ex.vol60; e.valid=true; e.live=false; e.snap=false; }
+      else { e.valid=false; e.live=false; }
+    }
+  });
+  compute(); render(); renderNav();             // 先用快照即时渲染
+  setStatus('warn', `已加载 ${snapSrcLabel()} 行情快照（截至 ${SNAP_DATE}），正在后台尝试实时刷新…`);
+  // PHASE 2：后台实时升级（东财/腾讯），成功则覆盖、增量重渲染
+  await backgroundLiveUpgrade();
+}
+
+/* 后台异步尝试实时行情（东财 → 腾讯兜底），成功则用后复权序列覆盖快照值并增量重渲染；
+   失败（如家里网络封东财但腾讯可达）则静默保持快照。
+   关键：用后复权(rehab=2)序列跑 computeFromKlines，使 BIAS20/Vol60/250日涨幅 与 NAV 均为后复权口径。 */
+async function backgroundLiveUpgrade(){
+  await Promise.all(etfData.map(async e=>{
+    let kl = null, price = null;
+    // 1) 东财后复权日线（含本机 server.js / 公共代理兜底，见 fetchKline）
+    try{ kl = await withTimeout(fetchKline(e.secid, 2), 9000, e.code); }catch(_){}
+    // 2) 东财被封 → 腾讯财经后复权日线（不同域名，绕过东财封锁；家里网络通常可达）
+    if(!kl){ try{ kl = await withTimeout(jsonpTencent(e.secid, 2), 13000, e.code+'_tx'); }catch(_){} }
+    if(!kl) return;                              // 实时全失败：保留快照（可能不复权）
+    computeFromKlines(e, kl);                    // 后复权序列 → 因子/NAV 同口径
+    e.live = e.valid; e.snap = false;
+    // 现价：优先不复权实际价（东财 fqt=0 / 腾讯 rehab=0），与行情软件一致
+    try{ const k0 = await withTimeout(fetchKline(e.secid, 0), 9000, e.code+'_0'); if(k0){ const c=k0.map(x=>parseFloat(x.split(',')[2])); price=c[c.length-1]; } }catch(_){}
+    if(price==null){ try{ const k0t = await withTimeout(jsonpTencent(e.secid, 0), 13000, e.code+'_tx0'); if(k0t){ const c=k0t.map(x=>parseFloat(x.split(',')[2])); price=c[c.length-1]; } }catch(_){} }
+    if(price!=null) e.price = price;
+  }));
+  // 基准也走实时升级：让净值统计的基准蓝线和策略曲线同步到最新收盘日
+  await upgradeBenchmarks();
+  compute(); render(); renderNav();             // 用实时覆盖后的结果重渲染
+}
+
+async function upgradeBenchmarks(){
+  if(!SNAP_BENCHMARKS) SNAP_BENCHMARKS = {};
+  await Promise.all(Object.keys(BENCH_SECID).map(async bid=>{
+    const secid = BENCH_SECID[bid];
+    let kl = null;
+    try{ kl = await withTimeout(fetchKline(secid, 2), 9000, bid); }catch(_){}
+    if(!kl){ try{ kl = await withTimeout(jsonpTencent(secid, 2), 13000, bid+'_tx'); }catch(_){} }
+    if(!kl) return;
+    const old = SNAP_BENCHMARKS[bid] && SNAP_BENCHMARKS[bid].klines || [];
+    const merged = mergeKlines(old, kl);
+    SNAP_BENCHMARKS[bid] = {label: BENCH_LABEL[bid] || (SNAP_BENCHMARKS[bid] && SNAP_BENCHMARKS[bid].label) || bid, klines: merged};
+  }));
+}
+/* 超时包装：底层请求完成/超时后都要清掉定时器，否则反复点「立即刷新」会不断累积挂起的 Timer
+   与未取消的网络请求（原实现用 Promise.race 但从不 clearTimeout）。 */
+function withTimeout(p, ms, tag){
+  let timer=null;
+  const timeout=new Promise((_,rej)=>{ timer=setTimeout(()=>rej(new Error('timeout '+tag)), ms); });
+  return Promise.race([Promise.resolve(p).finally(()=>clearTimeout(timer)), timeout]);
+}
+
+/* ===== 排名打分（沿用原逻辑）===== */
+function compute(){
+  // 动量因子(果仁口径)：用后复权收盘价 adjClose（与 ma20 同口径），而非展示用的不复权价
+  etfData.forEach(e=>{
+    if(e.valid===false){ e.bias20=0; e.biasScore=0; e.volScore=0; e.score=0; e.qualify=false; return; }
+    e.bias20 = (e.adjClose - e.ma20)/e.ma20*100;
+    e.qualify = e.chg250 > 0;          // 250日涨幅>0 为买入资格门槛
+  });
+  const qual = [...etfData].filter(e=>e.valid && e.qualify);   // 达标（候选）子集
+  const qn = qual.length;                                         // 候选数量（满分 2*qn）
+  // 仅在达标子集内独立排名打分（不达标者不进候选、不参与排名）
+  qual.sort((a,b)=>b.bias20 - a.bias20).forEach((e,i)=>e.biasScore = qn - i);
+  qual.sort((a,b)=>a.vol60 - b.vol60).forEach((e,i)=>e.volScore = qn - i);
+  qual.forEach(e=>{ e.score = e.biasScore + e.volScore; });
+  etfData.forEach(e=>{ if(e.valid && !e.qualify){ e.biasScore=0; e.volScore=0; e.score=0; } });
+}
+
+function decision(list, top5){
+  const top5Codes = new Set(top5.map(e=>e.code));
+  const held = list.filter(e=>e.holding);
+  const holdInTop = held.filter(e=>top5Codes.has(e.code));   // 持有且在前5 → 继续持有
+  const sellOut   = held.filter(e=>!top5Codes.has(e.code));  // 持有但跌出前5 → 卖出
+  const buyIn     = top5.filter(e=>!e.holding);              // 前5中尚未持有 → 买入
+  return {
+    action: (sellOut.length===0 && buyIn.length===0) ? 'HOLD' : 'REBALANCE',
+    held, holdInTop, sellOut, buyIn
+  };
+}
+function actBadge(d){
+  return d.action==='HOLD' ? {cls:'b-hold', t:'持有'} : {cls:'b-switch', t:'调仓'};
+}
+
+function rowHTML(e){
+  if(e.valid===false){
+    // 区分两种无效原因：历史根数不足（数据已拿到但不能算）vs 完全取不到数据
+    const msg = (e.klineCnt && e.klineCnt>0)
+      ? `历史数据不足（仅 ${e.klineCnt} 根 &lt; 61），暂无法计算双因子`
+      : '行情获取失败（快照与实时均不可用）';
+    return `<tr><td colspan="11" style="text-align:center;color:var(--up);">${e.name}（${e.code}）${msg}</td></tr>`;
+  }
+  const biasCls = e.bias20>=0?'factor':'factor neg';
+  const sign = e.bias20>=0?'+':'';
+  const chgCls = e.chg250>=0?'factor':'factor neg';
+  const chgSign = e.chg250>=0?'+':'';
+  let state;
+  if(!e.qualify){
+    state = e.holding
+      ? '<span class="state-tag st-sell">应卖出·不达标</span>'
+      : '<span class="state-tag st-fail">不达标</span>';
+  }else{
+    state = e.holding
+      ? (e.inTop5 ? '<span class="state-tag st-hold">持仓</span>' : '<span class="state-tag st-sell">应卖出</span>')
+      : (e.inTop5 ? '<span class="state-tag st-target">目标买入</span>' : '—');
+  }
+  const rowCls = (!e.qualify) ? 'disqualified' : (e.rank===1 ? 'best' : '');
+  return `<tr class="${rowCls}">
+    <td>${e.rank ? ('<span class="rank r'+e.rank+'">'+e.rank+'</span>') : '<span style="opacity:.4">—</span>'}</td>
+    <td><span class="etf-name">${e.name}</span><span class="etf-code">${e.code}</span></td>
+    <td>${e.price.toFixed(3)}</td>
+    <td>${e.ma20.toFixed(3)}</td>
+    <td class="${biasCls}">${sign}${e.bias20.toFixed(2)}%</td>
+    <td>${e.biasScore || '—'}</td>
+    <td class="factor">${e.vol60.toFixed(1)}%</td>
+    <td>${e.volScore || '—'}</td>
+    <td class="${chgCls}">${chgSign}${e.chg250.toFixed(1)}%${e.chgDays>=250?'':`<span style="opacity:.5;font-size:.78em"> ·${e.chgDays}日</span>`}</td>
+    <td class="score">${e.score || '—'}</td>
+    <td>${state}</td>
+  </tr>`;
+}
+
+function render(){
+  const list = [...etfData].sort((a,b)=>b.score - a.score);   // 综合得分降序（达标者在前，不达标 score=0 在后）
+  let r=0;
+  list.forEach(e=>{ e.rank = e.score>0 ? (++r) : 0; });        // 仅达标者编号名次，不达标显示 —
+  const top5 = list.filter(e=>e.score>0).slice(0,5);           // 目标买入池 = 达标者中前5
+  // 关键：必须先全部重置再标记，否则曾进过前5的标的会永久保留 inTop5=true，
+  // 刷新后排名变动时状态列/决策明细会显示错误的「持仓中/目标买入」。
+  etfData.forEach(e=>{ e.inTop5=false; });
+  top5.forEach(e=>e.inTop5=true);
+
+  document.getElementById('poolBody').innerHTML = list.map(rowHTML).join('');
+
+  const d = decision(list, top5);
+  const badge = actBadge(d);
+  const held = list.filter(e=>e.holding);
+
+  // 概览（现有持仓 / 下次调仓日 由 renderNav 依据最新一次系统调仓填充）
+
+  // 决策
+  document.getElementById('decHold').textContent = held.length ? ('持有 '+held.length+' 只') : '空仓';
+  document.getElementById('decHold').style.color = 'var(--tx)';
+  document.getElementById('decHoldDet').innerHTML = held.length
+    ? held.map(e=> e.name+'（'+(e.rank>0?('第'+e.rank+'名'):'不达标')+(e.inTop5?' · 持仓中' : ' · 应卖出')+'）').join('<br>')
+    : '当前无持仓';
+  document.getElementById('decAct').textContent = badge.t;
+  document.getElementById('decAct').style.color = d.action==='HOLD' ? 'var(--gold)' : 'var(--accent)';
+  const parts=[];
+  if(d.buyIn.length)     parts.push('<b style="color:var(--dn)">买入</b>：'+d.buyIn.map(e=>e.name).join('、'));
+  if(d.sellOut.length)   parts.push('<b style="color:var(--up)">卖出</b>：'+d.sellOut.map(e=>e.name).join('、'));
+  if(d.holdInTop.length) parts.push('<b style="color:var(--gold)">持有</b>：'+d.holdInTop.map(e=>e.name).join('、'));
+  document.getElementById('decDet').innerHTML = parts.join('<br>') || '无需操作';
+
+  const now = new Date();
+  const ts = now.toLocaleString('zh-CN',{hour12:false});
+  document.getElementById('updateTime').textContent = ts;
+  document.getElementById('dataTime').textContent = ts;
+  renderWarn();
+}
+
+/* ===== 乖离率减仓预警（拥挤度管理，张翼轸 BIAS 思路） ===== */
+const BIAS_T1=10, BIAS_T2=15, BIAS_T3=20;   // 文章原值，固定：BIAS20>10%减一半、>15%再减一半、BIAS60>20%再减一半
+function warnSignal(e){
+  const b20=e.bias20, b60=e.bias60;
+  const tags=[];
+  if(b20>BIAS_T1) tags.push('10%');
+  if(b20>BIAS_T2) tags.push('15%');
+  if(b60>BIAS_T3) tags.push('60·20%');
+  return { triggered: tags.length>0, tags, b20, b60 };
+}
+function renderWarn(){
+  const $t=document.getElementById('warnTable'); if(!$t) return;
+  const rows = etfData.filter(e=>e.valid).map(e=>{
+    const w = warnSignal(e);
+    const b20cls = e.bias20>=BIAS_T2 ? 'bias-w2' : (e.bias20>=BIAS_T1 ? 'bias-w1' : (e.bias20>=0?'factor':'factor neg'));
+    const b20sign = e.bias20>=0?'+':'';
+    const b60cls = (e.bias60!==undefined && e.bias60>=BIAS_T3) ? 'bias-w3' : (e.bias60!==undefined && e.bias60>=0?'factor':'factor neg');
+    const b60sign = (e.bias60!==undefined && e.bias60>=0)?'+':'';
+    const b60txt = (e.bias60!==undefined) ? (b60sign+e.bias60.toFixed(2)+'%') : '—';
+    const sig = w.triggered
+      ? `<span class="badge b-warn">减仓预警</span><span class="warn-tags">${w.tags.map(t=>`<span>${t}</span>`).join('')}</span>`
+      : `<span class="badge b-ok">正常</span>`;
+    return `<tr>
+      <td style="text-align:left">${e.name}</td>
+      <td class="${b20cls}">${b20sign}${e.bias20.toFixed(2)}%</td>
+      <td class="${b60cls}">${b60txt}</td>
+      <td style="text-align:left">${sig}</td>
+    </tr>`;
+  }).join('');
+  $t.innerHTML = `<thead><tr>
+      <th style="text-align:left">标的</th>
+      <th>BIAS20</th>
+      <th>BIAS60</th>
+      <th style="text-align:left">减仓信号</th>
+    </tr></thead><tbody>${rows}</tbody>`;
+  // 面板日期：取已加载 ETF 中最新交易日（实时/快照同源 fullDates 均为 YYYYMMDD），否则回退快照日期
+  let ld='';
+  etfData.forEach(e=>{ if(e.fullDates && e.fullDates.length){ const d=e.fullDates[e.fullDates.length-1]; if(d>ld) ld=d; } });
+  const $d=document.getElementById('warnDate');
+  if($d) $d.textContent = ld ? ('截至 '+dashDate(ld)) : (SNAP_DATE ? ('截至 '+SNAP_DATE) : '--');
+}
+
+function setStatus(type, text){
+  const bar = document.getElementById('statusBar');
+  bar.className = 'status-bar ' + type;
+  document.getElementById('statusText').textContent = text;
+  document.getElementById('dataSrc').textContent =
+    type==='ok' ? '东方财富/腾讯实时（后复权）' : (type==='warn' && SNAP_DATE ? snapSrcLabel()+' 行情快照('+SNAP_DATE+')' : (type==='warn' ? '东方财富 + 示例兜底' : '—'));
+}
+
+/* ===== 手动刷新（无定时自动刷新）===== */
+async function loadAndRender(){
+  setStatus('loading','正在加载行情快照…');
+  await fetchAll();                              // 内部：先快照渲染，再后台实时升级并重渲染
+  const liveCnt = etfData.filter(e=>e.live).length;
+  const snapCnt = etfData.filter(e=>e.snap).length;
+  const validCnt = etfData.filter(e=>e.valid).length;
+  if(validCnt===0){ setStatus('error','行情快照与实时均不可用，请检查网络后手动刷新'); return 'error'; }
+  if(liveCnt === N){ setStatus('ok', `数据已更新 · 来源东方财富/腾讯实时（后复权）`); return 'ok'; }
+  if(snapCnt > 0){ setStatus('warn', `实时通道被网络拦截 · 已加载 ${snapSrcLabel()} 行情快照 ${snapCnt}/${N} 只（截至 ${SNAP_DATE}）`); return 'warn'; }
+  setStatus('warn', `已获取 ${liveCnt}/${N} 只实时行情，其余 ${N-liveCnt} 只使用示例值`);
+  return 'warn';
+}
+async function manualRefresh(){
+  const btn=document.getElementById('refreshBtn');
+  btn.disabled=true; btn.classList.add('spin');
+  try{
+    const st=await loadAndRender();
+    // 按真实结果提示（原实现无论成功失败都提示"已手动刷新行情"，全部失败时具有误导性）
+    showToast(st==='error' ? '刷新失败：行情通道均不可用' : (st==='ok' ? '已刷新：实时行情' : '已刷新：快照行情（实时通道被拦截）'));
+  }catch(e){
+    showToast('刷新异常：'+(e&&e.message?e.message:'未知错误'));
+  }finally{
+    btn.disabled=false; btn.classList.remove('spin');
+  }
+}
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.style.display='block';
+  setTimeout(()=>t.style.display='none',2200);
+}
+
+/* ===================== 净值统计（模拟 / 基准 / 图表 / 记录） ===================== */
+const NAV_KEY='dualFactorNavParams', NAV_MANUAL_KEY='dualFactorNavManual';
+/* 净值图坐标系常量：drawNavChart 与 showNavTip 必须共用同一组值，
+   否则悬停 tooltip 的日期/收益率会与鼠标所指的数据点错位（左右两端偏差最大）。 */
+const NAV_W=680, NAV_H=300, NAV_PADL=48, NAV_PADR=30, NAV_PADT=18, NAV_PADB=30;
+
+/* 日期规范化：统一为 YYYYMMDD（去掉所有非数字），无法解析返回 ''。
+   页面内部日历/快照日期均为 YYYYMMDD；起始日输入框是 type=date（YYYY-MM-DD），
+   读入后必须规范化，否则 '20260105' >= '2026-08-11' 这类字符串比较会失真，
+   把全部历史交易日都纳入，产生大量虚假调仓记录。 */
+function normalizeDate(s){
+  if(!s || s==='__AUTO__') return '';
+  const d=String(s).replace(/\D+/g,'');
+  return /^\d{8}$/.test(d) ? d : '';
+}
+function dashDate(s){ // YYYYMMDD -> YYYY-MM-DD（供 type=date 输入框展示）
+  return (s && /^\d{8}$/.test(s)) ? s.replace(/^(\d{4})(\d{2})(\d{2})$/,'$1-$2-$3') : '';
+}
+/* ===== A 股法定休市日表（只登记落在工作日的休市日；周末由 getDay() 判断）=====
+   来源：沪深北交易所《关于 2026 年部分节假日休市安排的通知》（上证公告〔2025〕45 号）。
+   新年度公告（通常 12 月下旬发布）出来后，在下方追加次年日期，并同步更新 A_HOLIDAY_MAX_YEAR。 */
+const A_HOLIDAYS = {
+  '2026-01-01':'元旦', '2026-01-02':'元旦',
+  '2026-02-16':'春节', '2026-02-17':'春节', '2026-02-18':'春节', '2026-02-19':'春节', '2026-02-20':'春节', '2026-02-23':'春节',
+  '2026-04-06':'清明',
+  '2026-05-01':'劳动节', '2026-05-04':'劳动节', '2026-05-05':'劳动节',
+  '2026-06-19':'端午',
+  '2026-09-25':'中秋',
+  '2026-10-01':'国庆', '2026-10-02':'国庆', '2026-10-05':'国庆', '2026-10-06':'国庆', '2026-10-07':'国庆'
+};
+/* 休市安排已公布到的年份。推算结果超出该年份＝跨入尚未公布安排的年份，返回值标注「（估）」。 */
+const A_HOLIDAY_MAX_YEAR = 2026;
+
+function isoDate(d){
+  const m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+  return d.getFullYear()+'-'+m+'-'+day;
+}
+/* 从 yyyymmdd 起前进 n 个交易日，返回 yyyy-mm-dd（下次调仓日）。
+   ① 真实交易日历已覆盖该区间 → 直接取历法结果（天然含全部法定休市与停牌，最精确）；
+   ② 日历未覆盖（落在未来）→ 按「跳周末 + 跳法定休市表」推算，跨入未公布年份时追加「（估）」。 */
+function nextTradingDate(yyyymmdd, n){
+  if(!yyyymmdd || !/^\d{8}$/.test(yyyymmdd) || !(n>0)) return '--';
+  const ahead = buildCalendar().filter(d => d > yyyymmdd);
+  if(ahead.length >= n) return dashDate(ahead[n-1]);
+  const d=new Date(+yyyymmdd.slice(0,4), +yyyymmdd.slice(4,6)-1, +yyyymmdd.slice(6,8));
+  let cnt=0;
+  while(cnt<n){
+    d.setDate(d.getDate()+1);
+    const w=d.getDay();
+    if(w<1 || w>5) continue;              // 跳过周六/周日
+    if(A_HOLIDAYS[isoDate(d)]) continue;  // 跳过法定休市日
+    cnt++;
+  }
+  return isoDate(d) + (d.getFullYear() > A_HOLIDAY_MAX_YEAR ? '（估）' : '');
+}
+
+// 自动模式净值模拟锚点：双因子策略启动日。固定不随"今天"漂移，使历史调仓稳定可见（如 8/11 首买）。
+const NAV_ANCHOR_START = '20260811';
+function loadNavParams(){
+  let p={start:'__AUTO__',userStartSet:false,capital:20000,rebal:10,comm:0.0001,bench:'cyb',mode:'auto'};
+  try{
+    const s=JSON.parse(localStorage.getItem(NAV_KEY));
+    if(s){
+      // 规范化起始日，避免带横杠的旧值污染后续字符串比较
+      p.start = (s.start==='__AUTO__'||!s.start) ? '__AUTO__' : (normalizeDate(s.start)||'__AUTO__');
+      p.userStartSet = !!s.userStartSet;
+      // 护栏：持久化值可能被非法输入污染（如 rebal<1 会死循环、capital<0 会让净值失真、comm<0 会「凭空生钱」）
+      if(typeof s.capital==='number' && isFinite(s.capital) && s.capital>0) p.capital=s.capital;
+      if(typeof s.rebal==='number' && isFinite(s.rebal) && s.rebal>=1) p.rebal=Math.floor(s.rebal);
+      if(typeof s.comm==='number' && isFinite(s.comm) && s.comm>=0) p.comm=s.comm;
+      if(s.bench) p.bench=s.bench;
+      if(s.mode) p.mode=s.mode;
+    }
+  }catch(e){}
+  return p;
+}
+/* 各 ETF 最新交易日的最大值（注意：是 max 而非交集"共同交易日"；
+   快照生成时 12 只日期一致，实时升级后个别标的可能领先或停牌而落后） */
+function latestTradeDate(){
+  const ds=etfData.map(e=>e.fullDates&&e.fullDates.length?e.fullDates[e.fullDates.length-1]:null).filter(Boolean);
+  if(!ds.length) return null;
+  ds.sort(); return ds[ds.length-1];
+}
+/* 本机读写在最底层：未登录 / 断网 / SDK 不可达时行为与改造前完全一致。
+   上层 saveNavParams / saveManualRecords 再挂云同步钩子。 */
+function saveNavParamsLocalOnly(p){ try{ localStorage.setItem(NAV_KEY, JSON.stringify(p)); }catch(e){} }
+function loadManualRecords(){ try{ const s=JSON.parse(localStorage.getItem(NAV_MANUAL_KEY)); return Array.isArray(s)?s:[]; }catch(e){ return []; } }
+function saveManualRecordsLocalOnly(a){ try{ localStorage.setItem(NAV_MANUAL_KEY, JSON.stringify(a)); }catch(e){} }
+function saveNavParams(p){ saveNavParamsLocalOnly(p); cloudScheduleParamsPush(p); }
+function saveManualRecords(a){ saveManualRecordsLocalOnly(a); cloudScheduleRecordsPush(a); }
+
+/* ==================================================================
+   云同步 · WorkBuddy 云服务
+   ------------------------------------------------------------------
+   数据归属：owner 隔离（RLS 策略 owner_id = auth.uid()），登录后只能读写
+   自己的调仓参数与手动登记记录 —— SELECT 也一样要登录，别人读不到。
+
+   未登录 / 断网 / CDN 不可达：照旧本机保存，状态条显式写明「仅本机」，
+   绝不把本机数据伪装成已同步云端，也绝不造一个假身份去读写云端。
+
+   下面三项是开通云服务时 publicConfig 的原样拷贝，只有
+   endpoint / publishableKey 参与请求。重新发布必须复用同一个
+   applicationId，否则域名变化 → 服务端 Origin 精确匹配失败 → 登录失效。
+   ================================================================== */
+const WB_CLOUD = {
+  resourceId: 'wbcs_syEFQdnIYXA6aOYavFtoT3',
+  endpoint: 'https://quant-strategy-hub-86456.app.workbuddy.host',
+  publishableKey: 'wbpk_fU21yU4uyoyt0nGRh1r7nf_7vSwsY5V6ZMmN4Y4QZ2KD6R6ieWmkmXI'
+};
+/* 云同步只在官方发布域名下可用：服务端按 Origin 精确匹配，
+   在 GitHub Pages / 本地预览 / file:// 下登录不可能成功。
+   与其显示一个「点了必然失败」的登录按钮，不如直接说明白。
+   判据取 endpoint 的 origin（精确比对，不做 host 后缀模糊匹配），
+   避免把同一负载域名下的兄弟站点误判为可用。 */
+const CLOUD_ORIGIN=(function(){ try{ return new URL(WB_CLOUD.endpoint).origin; }catch(e){ return ''; } })();
+const CLOUD_ORIGIN_OK=(!!CLOUD_ORIGIN && location.origin===CLOUD_ORIGIN);
+const CLOUD_PREF_KEY='dualFactorCloudPref';   // 用户选定的同步方向：push | pull
+
+let cloud=null;              // 云客户端；初始化成功才有值
+let cloudReady=false;        // SDK 是否可用
+let cloudUser=null;          // 当前登录用户 {id,email}；null = 未登录
+let cloudAutoSync=false;     // 用户已选定同步方向后，才允许自动推送
+let cloudParamTimer=null, cloudRecTimer=null;
+let pendingEmailOtp=null;    // 取码后暂存 {email,verificationId,isExistingUser}，跨事件复用
+let pendingReset=null;       // 重置密码句柄 resetPasswordForEmail 的返回
+let cmResendTimer=null;
+
+const cmVal=id=>{ const e=document.getElementById(id); return e ? String(e.value||'').trim() : ''; };
+function maskEmail(e){
+  const s=String(e||''); const at=s.indexOf('@');
+  return at<1 ? (s ? s.slice(0,3)+'***' : '已登录账号') : s.slice(0,1)+'***'+s.slice(at);
+}
+function cloudPref(){ try{ return localStorage.getItem(CLOUD_PREF_KEY)||''; }catch(e){ return ''; } }
+function setCloudPref(v){ try{ localStorage.setItem(CLOUD_PREF_KEY, v); }catch(e){} }
+
+/* 初始化（全站只初始化一次，各模块复用同一个客户端） */
+function initCloudClient(){
+  try{
+    if(typeof WorkBuddyCloud==='undefined' || typeof WorkBuddyCloud.createWorkBuddyCloud!=='function') return false;
+    cloud=WorkBuddyCloud.createWorkBuddyCloud({
+      endpoint: WB_CLOUD.endpoint,
+      publishableKey: WB_CLOUD.publishableKey
+    });
+    cloudReady=true; return true;
+  }catch(e){ cloudReady=false; return false; }
+}
+/* 云调用错误 → 人话。不吐原始报文、不吐 token。 */
+function cloudErrMsg(error){
+  if(!error) return '未知错误';
+  const code=error.code||'';
+  if(code==='42P01') return '云端数据表缺失，请先初始化';
+  if(code==='42501') return '云端拒绝了本次操作（权限不足）';
+  if(code==='23505') return '云端已存在相同记录';
+  const kind=error.kind||'';
+  if(kind==='network'||kind==='backend-unavailable') return '云端连接失败，请检查网络后重试';
+  if(kind==='unauthenticated'||kind==='invalid_grant') return '登录已过期，请重新登录';
+  const msg=String(error.message||'');
+  if(/Failed to fetch|NetworkError|Load failed|ERR_/i.test(msg)) return '云端连接失败，请检查网络后重试';
+  return msg||'云同步失败';
+}
+/* 把「写成功了吗」问清楚：写操作空数组 = 被 RLS 拦下，不是成功 */
+function assertRows(data, expect, what){
+  const got=Array.isArray(data)?data.length:0;
+  if(got<expect) throw new Error(what+'未生效（云端未返回对应行，可能被权限策略拦截）');
+}
+
+/* ── 状态条 ─────────────────────────────────────────────────────── */
+function setCloudBar(state, text){
+  const bar=document.getElementById('cloudBar'); if(!bar) return;
+  bar.classList.remove('on','pending','err');
+  if(state) bar.classList.add(state);
+  const t=document.getElementById('cloudTxt'); if(t) t.textContent=text;
+}
+function syncCloudButtons(){
+  const $=id=>document.getElementById(id);
+  const li=$('cloudLoginBtn'), pu=$('cloudPushBtn'), pl=$('cloudPullBtn'), lo=$('cloudOutBtn');
+  const canSignIn = cloudReady && CLOUD_ORIGIN_OK;   // 非官方域名下不给登录入口
+  if(li) li.hidden = !canSignIn || !!cloudUser;
+  if(lo) lo.hidden = !cloudUser;
+  if(pu) pu.hidden = !cloudUser;
+  if(pl) pl.hidden = !cloudUser;
+}
+function renderCloudBar(){
+  syncCloudButtons();
+  if(!CLOUD_ORIGIN_OK)  setCloudBar('','本机保存 · 云同步仅在官方发布域名可用（当前来源不支持登录，数据存在本机浏览器）');
+  else if(!cloudReady)  setCloudBar('err','云同步不可用（SDK 未加载）· 当前仅本机保存');
+  else if(!cloudUser)   setCloudBar('','本机保存 · 未登录（登录后可在多设备同步参数与登记记录）');
+  else setCloudBar(cloudAutoSync?'on':'pending','已登录 '+maskEmail(cloudUser.email)+(cloudAutoSync?' · 自动同步中':' · 待选择同步方向'));
+}
+
+/* ── 登录态 ─────────────────────────────────────────────────────── */
+async function refreshCloudUser(){
+  if(!cloudReady){ cloudUser=null; renderCloudBar(); return null; }
+  try{
+    const { data }=await cloud.auth.getSession();
+    cloudUser=(data && data.user) ? { id:data.user.id, email:data.user.email } : null;
+  }catch(e){ cloudUser=null; }
+  renderCloudBar();
+  return cloudUser;
+}
+
+/* ── 云端读写（全部省略 owner_id，由 DEFAULT auth.uid() 与 RLS 决定归属）── */
+async function cloudPushParams(p){
+  const { data, error }=await cloud.database.from('nav_params')
+    .upsert({ data:p, updated_at:new Date().toISOString() }, { onConflict:'owner_id' })
+    .select();
+  if(error) throw error;
+  assertRows(data,1,'参数保存');
+  return data.length;
+}
+async function cloudPullParams(){
+  const { data, error }=await cloud.database.from('nav_params').select('data').limit(1);
+  if(error) throw error;
+  return (Array.isArray(data)&&data.length) ? data[0].data : null;
+}
+async function cloudPullRecords(){
+  const { data, error }=await cloud.database.from('nav_manual_records')
+    .select('trade_date').order('trade_date',{ascending:true});
+  if(error) throw error;
+  return (Array.isArray(data)?data:[]).map(r=>r.trade_date);
+}
+/* 登记记录按日期做差量同步：只增缺失的、只删多余的，不做无 WHERE 的整表删 */
+async function cloudPushRecords(local){
+  const remote=await cloudPullRecords();
+  const toAdd=local.filter(d=>!remote.includes(d));
+  const toDel=remote.filter(d=>!local.includes(d));
+  if(toDel.length){
+    const { data, error }=await cloud.database.from('nav_manual_records')
+      .delete().in('trade_date', toDel).select('trade_date');
+    if(error) throw error;
+    assertRows(data,toDel.length,'登记记录删除');
+  }
+  if(toAdd.length){
+    const { data, error }=await cloud.database.from('nav_manual_records')
+      .insert(toAdd.map(d=>({ trade_date:d }))).select('trade_date');
+    if(error) throw error;
+    assertRows(data,toAdd.length,'登记记录新增');
+  }
+  return { added:toAdd.length, removed:toDel.length };
+}
+
+/* ── 同步动作 ───────────────────────────────────────────────────── */
+/* 登录后首次：云端为空 → 把本机数据种上去；云端已有数据 → 不覆盖任何一侧，交给用户选 */
+async function cloudAfterLogin(){
+  renderCloudBar();
+  setCloudBar('pending','已登录 '+maskEmail(cloudUser.email)+' · 正在读取云端…');
+  try{
+    const [rp,rr]=await Promise.all([cloudPullParams(), cloudPullRecords()]);
+    if(!rp && rr.length===0){
+      const lr=loadManualRecords();
+      await cloudPushParams(loadNavParams());
+      await cloudPushRecords(lr);
+      cloudAutoSync=true; setCloudPref('push');
+      setCloudBar('on','已登录 '+maskEmail(cloudUser.email)+' · 云端为空，已把本机参数与 '+lr.length+' 条登记记录上传');
+    }else{
+      cloudAutoSync=false;
+      setCloudBar('pending','已登录 '+maskEmail(cloudUser.email)+' · 云端已有数据（登记 '+rr.length+' 条'+(rp?'、参数已存过':'')+'），请选「上传本机 → 云端」或「从云端拉取」');
+    }
+  }catch(e){
+    cloudAutoSync=false;
+    setCloudBar('err','已登录，但云端读取失败：'+cloudErrMsg(e));
+  }
+}
+async function cloudUploadAll(){
+  if(!cloudUser) return;
+  /* 覆盖前必须先读云端，三个理由：
+     ① 云端为空就别打扰用户，直接传走（与加确认之前的行为一致）；
+     ② 云端有数据时，得先把「会新增几条、删几条」算出来讲清楚，再让用户决定；
+     ③ 读不到就中止 —— 宁可不传，也不在情况不明时做一次不可撤销的覆盖。 */
+  setCloudBar('pending','正在核对云端现状…');
+  let rp=null, rr=[];
+  try{ [rp,rr]=await Promise.all([cloudPullParams(), cloudPullRecords()]); }
+  // 用「·」分段而不是再套一层括号：cloudErrMsg 自己已经带括号（如「云端拒绝了本次操作（权限不足）」），
+  // 外面再包一层会变成「（…（…））」的嵌套括号，读起来很糟
+  catch(e){ setCloudBar('err','上传已中止 · 云端现状读取失败：'+cloudErrMsg(e)+' · 请稍后重试'); return; }
+  // 提前取一次本机快照：弹窗里显示的条数与真正上传的内容必须同源，否则用户是照着错的数在决策
+  const lr=loadManualRecords();
+  if(rp || rr.length>0){
+    const add=lr.filter(d=>!rr.includes(d)).length;
+    const del=rr.filter(d=>!lr.includes(d)).length;
+    const ok=await cfAsk(
+      '上传会覆盖云端数据',
+      '云端已有：参数 '+(rp?'已存过':'无')+' ｜ 登记记录 '+rr.length+' 条',
+      ['上传后一律以本机为准：',
+       '· 参数被本机当前值覆盖',
+       '· 登记记录 新增 '+add+' 条、删除 '+del+' 条',
+       '· 此操作不可撤销']
+    );
+    if(!ok){ setCloudBar('','已取消上传 · 云端与本机数据均未改动'); return; }
+  }
+  setCloudBar('pending','正在上传本机数据到云端…');
+  try{
+    await cloudPushParams(loadNavParams());
+    const r=await cloudPushRecords(lr);
+    cloudAutoSync=true; setCloudPref('push');
+    setCloudBar('on','已上传：参数 ✔ ｜ 登记 +'+r.added+' / −'+r.removed+'（云端共 '+lr.length+' 条）· 后续自动同步');
+    showToast('已上传到云端');
+  }catch(e){ setCloudBar('err','上传失败：'+cloudErrMsg(e)); }
+}
+async function cloudDownloadAll(){
+  if(!cloudUser) return;
+  setCloudBar('pending','正在从云端拉取…');
+  try{
+    const rp=await cloudPullParams();
+    const rr=await cloudPullRecords();
+    if(!rp && !rr.length){ setCloudBar('','云端暂无数据，本机未改动'); showToast('云端暂无数据'); return; }
+    if(rp) saveNavParamsLocalOnly(rp);
+    saveManualRecordsLocalOnly(rr);
+    cloudAutoSync=true; setCloudPref('pull');
+    setCloudBar('on','已从云端拉取：参数 '+(rp?'✔':'—')+' ｜ 登记 '+rr.length+' 条 · 后续自动同步');
+    showToast('已从云端拉取');
+    renderNav();
+  }catch(e){ setCloudBar('err','拉取失败：'+cloudErrMsg(e)); }
+}
+/* 自动推送（仅已登录且已选定同步方向时生效，做 900ms 防抖） */
+function cloudScheduleParamsPush(p){
+  if(!cloudReady || !cloudUser || !cloudAutoSync) return;
+  clearTimeout(cloudParamTimer);
+  cloudParamTimer=setTimeout(async ()=>{
+    try{ await cloudPushParams(p); setCloudBar('on','已登录 '+maskEmail(cloudUser.email)+' · 参数已同步'); }
+    catch(e){ setCloudBar('err','参数同步失败：'+cloudErrMsg(e)); }
+  },900);
+}
+function cloudScheduleRecordsPush(a){
+  if(!cloudReady || !cloudUser || !cloudAutoSync) return;
+  clearTimeout(cloudRecTimer);
+  cloudRecTimer=setTimeout(async ()=>{
+    try{
+      const r=await cloudPushRecords(a);
+      setCloudBar('on','已登录 '+maskEmail(cloudUser.email)+' · 登记已同步（+'+r.added+' / −'+r.removed+'）');
+    }catch(e){ setCloudBar('err','登记同步失败：'+cloudErrMsg(e)); }
+  },900);
+}
+async function cloudSignOut(){
+  try{
+    const { error }=await cloud.auth.signOut();
+    if(error){ setCloudBar('err','退出登录失败：'+cloudErrMsg(error)); return; }
+  }catch(e){ setCloudBar('err','退出登录失败：'+cloudErrMsg(e)); return; }
+  cloudUser=null; cloudAutoSync=false; pendingEmailOtp=null; pendingReset=null;
+  setCloudPref('');
+  if(cloudReady) renderCloudBar();
+  showToast('已退出云同步');
+}
+
+/* ── 覆盖确认弹窗（复用 .cm-mask/.cm-box，零新增 CSS）──────────────
+   只有「上传本机 → 云端」这条会丢云端数据的路径才走它。两处刻意不加：
+     · 自动同步（cloudSchedule*Push）跑在 900ms 防抖定时器里，
+       每改一次参数都弹一次会变成连环打断；
+     · 登录后首次播种（cloudAfterLogin）只在云端为空时触发，本就没有覆盖风险。
+   返回 Promise<boolean>，语义与原生 confirm 对齐。 */
+let cfResolve=null;
+function cfAsk(title, sub, lines){
+  return new Promise(resolve=>{
+    const mask=document.getElementById('cfMask');
+    if(!mask){ resolve(false); return; }            // 节点缺失时保守判否，绝不放行覆盖
+    if(cfResolve){ cfResolve(false); cfResolve=null; }  // 连点两次：先结掉上一个，避免 Promise 永久悬空
+    cfResolve=resolve;
+    const t=document.getElementById('cfTitle'); if(t) t.textContent=title||'确认';
+    const s=document.getElementById('cfSub');   if(s) s.textContent=sub||'';
+    const b=document.getElementById('cfBody');
+    if(b){
+      b.textContent='';   // 用 DOM 拼行而不是 innerHTML：内容虽然都是自己算的数字，也不给注入留口子
+      (lines||[]).forEach(txt=>{ const d=document.createElement('div'); d.textContent=txt; b.appendChild(d); });
+    }
+    mask.classList.add('show');
+    // 焦点落在「取消」而不是「确认」：破坏性操作不该让用户顺手一个回车就执行掉
+    const c=document.getElementById('cfCancel'); if(c) c.focus();
+  });
+}
+function cfClose(ok){
+  const mask=document.getElementById('cfMask'); if(mask) mask.classList.remove('show');
+  const r=cfResolve; cfResolve=null;
+  if(r) r(!!ok);
+}
+
+/* ── 登录弹窗 ───────────────────────────────────────────────────── */
+function cmMsg(text,kind){
+  const el=document.getElementById('cmMsg'); if(!el) return;
+  el.className='cm-msg'+(kind?' '+kind:'');
+  el.textContent=text||'';
+}
+function cmSwitchTab(view){
+  const panels={pwd:'cmPanelPwd', otp:'cmPanelOtp', signup:'cmPanelSignup', reset:'cmPanelReset'};
+  const tabs={pwd:'cmTabPwd', otp:'cmTabOtp', signup:'cmTabSignup'};
+  Object.keys(panels).forEach(k=>{ const p=document.getElementById(panels[k]); if(p) p.hidden=(k!==view); });
+  Object.keys(tabs).forEach(k=>{ const b=document.getElementById(tabs[k]); if(b) b.classList.toggle('active', k===view); });
+  cmMsg('');
+}
+function cmShow(view){
+  const mask=document.getElementById('cmMask'); if(!mask) return;
+  mask.classList.add('show');
+  cmSwitchTab(view||'pwd');
+}
+function cmHide(){ const m=document.getElementById('cmMask'); if(m) m.classList.remove('show'); cmMsg(''); }
+function cmBusy(b){
+  ['cmPwdSubmit','cmOtpSend','cmOtpSubmit','cmSuSend','cmSuSubmit','cmResetSend','cmResetSubmit','cmPwdForgot','cmResetBack']
+    .forEach(id=>{ const el=document.getElementById(id); if(el) el.disabled=!!b; });
+}
+function cmCountdown(id){
+  const btn=document.getElementById(id); if(!btn) return;
+  let n=60;
+  clearInterval(cmResendTimer);
+  btn.disabled=true; btn.textContent=n+'s 后重发';
+  cmResendTimer=setInterval(()=>{
+    n--;
+    if(n<=0){ clearInterval(cmResendTimer); btn.textContent='获取验证码'; btn.disabled=false; return; }
+    btn.textContent=n+'s 后重发';
+  },1000);
+}
+async function cmSignInPassword(){
+  if(!cloudReady){ cmMsg('云同步不可用（SDK 未加载）','err'); return; }
+  const email=cmVal('cmPwdEmail'), password=cmVal('cmPwdPass');
+  if(!email||!password){ cmMsg('请填写邮箱与密码','err'); return; }
+  cmBusy(true);
+  const { error }=await cloud.auth.signInWithPassword({ email, password });
+  cmBusy(false);
+  if(error){ cmMsg('邮箱或密码不正确','err'); return; }
+  await cmAfterSignIn();
+}
+/* 取码：只在这里发码；提交处理里绝不重复调用 sendOtp */
+async function cmSendOtp(purpose){
+  if(!cloudReady){ cmMsg('云同步不可用（SDK 未加载）','err'); return; }
+  const email = (purpose==='signup') ? cmVal('cmSuEmail') : cmVal('cmOtpEmail');
+  if(!email){ cmMsg('请先填写邮箱','err'); return; }
+  cmBusy(true);
+  const sent=await cloud.auth.sendOtp({ email });
+  cmBusy(false);
+  if(sent.error){ cmMsg('验证码发送失败：'+cloudErrMsg(sent.error),'err'); return; }
+  pendingEmailOtp={ email, verificationId:sent.data.verificationId, isExistingUser:sent.data.isExistingUser };
+  cmMsg(purpose==='signup' && sent.data.isExistingUser
+    ? '验证码已发送。验证通过后将直接登录该账号'
+    : '验证码已发送到该邮箱，请查收后填入验证码框', 'ok');
+  cmCountdown(purpose==='signup' ? 'cmSuSend' : 'cmOtpSend');
+}
+async function cmSubmitOtp(purpose){
+  if(!cloudReady){ cmMsg('云同步不可用（SDK 未加载）','err'); return; }
+  const email   = (purpose==='signup') ? cmVal('cmSuEmail') : cmVal('cmOtpEmail');
+  const token   = (purpose==='signup') ? cmVal('cmSuCode')  : cmVal('cmOtpCode');
+  const password= (purpose==='signup') ? cmVal('cmSuPass')  : '';
+  const pending = pendingEmailOtp;
+  if(!pending || pending.email!==email){ cmMsg('请先点为当前邮箱「获取验证码」','err'); return; }
+  if(!token){ cmMsg('请填写验证码','err'); return; }
+  if(purpose==='signup' && !pending.isExistingUser && !password){ cmMsg('注册需要设置密码','err'); return; }
+  cmBusy(true);
+  const completed=await cloud.auth.verifyOtp({
+    email: pending.email,
+    verificationId: pending.verificationId,
+    isExistingUser: pending.isExistingUser,
+    token,
+    password: pending.isExistingUser ? undefined : password
+  });
+  cmBusy(false);
+  if(completed.error){ cmMsg('验证失败：'+cloudErrMsg(completed.error),'err'); return; }  // 保留 challenge，不重发
+  pendingEmailOtp=null;
+  await cmAfterSignIn();
+}
+async function cmResetPassword(){
+  if(!cloudReady){ cmMsg('云同步不可用（SDK 未加载）','err'); return; }
+  const email=cmVal('cmResetEmail') || cmVal('cmPwdEmail');
+  if(!email){
+    // 还没填邮箱就点「忘记密码」：切到重置面板（它自带邮箱输入框），
+    // 而不是留在原页只弹一句提示 —— 否则用户会以为按钮点了没反应。
+    cmSwitchTab('reset');
+    cmMsg('请填写邮箱后点「获取验证码」');
+    return;
+  }
+  cmBusy(true);
+  const started=await cloud.auth.resetPasswordForEmail(email);
+  cmBusy(false);
+  if(started.error){ cmMsg('发送失败：'+cloudErrMsg(started.error),'err'); return; }
+  pendingReset=started.data;
+  const e=document.getElementById('cmResetEmail'); if(e && !e.value) e.value=email;
+  cmSwitchTab('reset');
+  cmMsg('验证码已发送，请填入验证码与新密码','ok');
+  cmCountdown('cmResetSend');
+}
+async function cmSubmitReset(){
+  const nonce=cmVal('cmResetCode'), password=cmVal('cmResetPass');
+  if(!pendingReset){ cmMsg('请先点为该邮箱「获取验证码」','err'); return; }
+  if(!nonce||!password){ cmMsg('请填写验证码与新密码','err'); return; }
+  cmBusy(true);
+  const completed=await pendingReset.updateUser({ nonce, password });
+  cmBusy(false);
+  if(completed.error){ cmMsg('重置失败：'+cloudErrMsg(completed.error),'err'); return; }
+  pendingReset=null;
+  await cmAfterSignIn();
+}
+async function cmAfterSignIn(){
+  cmHide();
+  const u=await refreshCloudUser();
+  if(!u){ cmShow('pwd'); cmMsg('登录未生效，请重试','err'); return; }
+  showToast('已登录云同步');
+  await cloudAfterLogin();
+}
+
+/* ── 绑定与启动 ─────────────────────────────────────────────────── */
+function initCloudBar(){
+  // 非官方发布域名（GitHub Pages / 本地预览 / file://）：不构造客户端、不订阅登录态、
+  // 不绑任何登录入口，状态条只留一句说明。本机读写在最底层，这里提前 return
+  // 完全不影响参数与登记记录的本机保存／回填 —— 只是拿掉了「不可能成功」的入口。
+  if(!CLOUD_ORIGIN_OK){ renderCloudBar(); return; }
+  const bind=(id,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener('click',fn); };
+  bind('cloudLoginBtn', ()=>cmShow('pwd'));
+  bind('cloudOutBtn',   cloudSignOut);
+  bind('cloudPushBtn',  cloudUploadAll);
+  bind('cloudPullBtn',  cloudDownloadAll);
+  bind('cmCloseBtn',    cmHide);
+  bind('cmMask',        ev=>{ if(ev.target===ev.currentTarget) cmHide(); });
+  // 覆盖确认弹窗：按钮或遮罩点击→关闭。ESC 加 cfResolve 前置判断，
+  // 只在确认弹窗真的开着时才响应，不会误关同时可能开着的登录弹窗
+  //（登录弹窗自身没有 ESC 处理，所以这里不存在监听器互相打架的问题）。
+  bind('cfOk',     ()=>cfClose(true));
+  bind('cfCancel', ()=>cfClose(false));
+  bind('cfMask',   ev=>{ if(ev.target===ev.currentTarget) cfClose(false); });
+  document.addEventListener('keydown', ev=>{ if(ev.key==='Escape' && cfResolve) cfClose(false); });
+  bind('cmTabPwd',      ()=>cmSwitchTab('pwd'));
+  bind('cmTabOtp',      ()=>cmSwitchTab('otp'));
+  bind('cmTabSignup',   ()=>cmSwitchTab('signup'));
+  // 主操作绑在 form 的 submit 上（不是按钮 click）：
+  // 这样回车能提交，且面板是真正的 <form>，密码管理器才会接管。
+  // 按钮相应改成 type=submit；取码/返回等次要按钮必须显式 type=button，否则会被当提交。
+  const bindForm=(id,fn)=>{
+    const f=document.getElementById(id); if(!f) return;
+    f.addEventListener('submit', ev=>{ ev.preventDefault(); fn(); });
+  };
+  bindForm('cmPanelPwd',    cmSignInPassword);
+  bindForm('cmPanelOtp',    ()=>cmSubmitOtp('otp'));
+  bindForm('cmPanelSignup', ()=>cmSubmitOtp('signup'));
+  bindForm('cmPanelReset',  cmSubmitReset);
+  bind('cmPwdForgot',   cmResetPassword);
+  bind('cmOtpSend',     ()=>cmSendOtp('otp'));
+  bind('cmSuSend',      ()=>cmSendOtp('signup'));
+  bind('cmResetSend',   cmResetPassword);
+  bind('cmResetBack',   ()=>cmSwitchTab('pwd'));
+  if(!initCloudClient()){ renderCloudBar(); return; }
+  try{
+    cloud.auth.onAuthStateChange((event)=>{
+      if(event==='SIGNED_OUT'){ cloudUser=null; cloudAutoSync=false; renderCloudBar(); }
+    });
+  }catch(e){}
+  renderCloudBar();
+  // 恢复登录态：按上次选定的方向续跑，从未选过则走首次逻辑
+  refreshCloudUser().then(()=>{
+    if(!cloudUser) return;
+    const pref=cloudPref();
+    if(pref==='push'){
+      cloudAutoSync=true;
+      setCloudBar('on','已登录 '+maskEmail(cloudUser.email)+' · 自动同步中（以本机为准）');
+    }else if(pref==='pull'){
+      cloudDownloadAll();
+    }else{
+      cloudAfterLogin();
+    }
+  }).catch(()=>{});
+}
+
+/* 交易日历：所有ETF日期并集，升序去重 */
+function buildCalendar(){
+  const set=new Set();
+  etfData.forEach(e=>{ if(e.fullDates) e.fullDates.forEach(d=>set.add(d)); });
+  return [...set].sort();
+}
+/* 截至日期 d 的最近收盘价（该ETF在 <=d 的最近交易日） */
+function priceAtD(e,d){
+  const ds=e.fullDates, cs=e.fullCloses; if(!ds) return null;
+  for(let i=ds.length-1;i>=0;i--){ if(ds[i]<=d) return cs[i]; }
+  return null;
+}
+/* 截至日期 d 的双因子前5（达标子集内排名打分），返回 [{code,name,priceAtD,...因子}] */
+function top5AtDate(d){
+  const arr=etfData.map(e=>{
+    const ds=e.fullDates, cs=e.fullCloses; if(!ds||!cs) return null;
+    let idx=-1; for(let i=0;i<ds.length;i++){ if(ds[i]<=d) idx=i; else break; }
+    if(idx<250) return null;                       // 数据不足 251（或 d 早于上市）
+    const closes=cs.slice(0,idx+1);
+    const f=calcFactors(closes); if(!f.valid) return null;
+    return {code:e.code, name:e.name, ...f, priceAtD:closes[closes.length-1]};
+  }).filter(Boolean);
+  const qual=arr.filter(e=>e.chg250>0), qn=qual.length;
+  qual.sort((a,b)=>b.bias20-a.bias20).forEach((e,i)=>e.biasScore=qn-i);
+  qual.sort((a,b)=>a.vol60-b.vol60).forEach((e,i)=>e.volScore=qn-i);
+  qual.forEach(e=>e.score=e.biasScore+e.volScore);
+  qual.sort((a,b)=>b.score-a.score);
+  return qual.slice(0,5);
+}
+/* 自动模式调仓日：起始日起每 rebal 个交易日一次
+   护栏：step 必须为正整数——若 p.rebal 为 0/负数，for 的 i 会递减导致条件恒真而死循环、页面冻结 */
+function autoRebalDays(p){
+  const cal=buildCalendar().filter(d=>d>=p.start); const days=[];
+  const step=Math.max(1, Math.floor(Number(p.rebal)||1));
+  for(let i=0;i<cal.length;i+=step) days.push(cal[i]);
+  return days;
+}
+/* 净值模拟引擎：在 rebalDays 指定的调仓日全清仓、等权买前5，扣佣金，逐日 mark-to-market
+   返回 {nav,rebalances,finalTotal,retPct,capital,fallback,actualStart,error} */
+function simulateNav(p, rebalDays){
+  const allCal=buildCalendar();
+  if(!allCal.length) return {error:'暂无行情数据，请先点「立即刷新」'};
+  const maxD = allCal[allCal.length-1];
+  let actualStart=p.start, fallback=false, startClamped=false;
+  if(p.start > maxD){
+    // 起始日晚于最新行情：回退到最新交易日演示（原实现此处的二次校验恒为真，
+    // 使 fallback 分支永不可达、只抛错误，属死代码，已修正为按设计意图回退演示）
+    actualStart=maxD; fallback=true;
+  }else if(p.start < allCal[0]){
+    // 起始日早于可用行情起点：从最早可用日起算，并提示用户（避免 summary 区间起点与实际曲线不符）
+    actualStart=allCal[0]; startClamped=true;
+  }
+  const cal=allCal.filter(d=>d>=actualStart);
+  if(cal.length===0) return {error:'无可用交易日（起始日 '+p.start+' 可能晚于最新行情）'};
+  const rbDays = (rebalDays && rebalDays.length) ? rebalDays : autoRebalDays({...p, start:actualStart});
+  const rbSet=new Set(rbDays);
+  let cash=p.capital, holdings={}, nav=[], rebalances=[];
+  let lastBuyTotal=0, lastRebalIdx=-1;  // 用于计算「本期收益」
+  for(let i=0;i<cal.length;i++){
+    const d=cal[i];
+    if(rbSet.has(d)){
+      const top5=top5AtDate(d); const sells=[], buys=[]; let commission=0;
+      // 卖出旧持仓前，先给上一期计算「本期收益」（持有市值 / 上次买入成本 - 1）
+      if(lastBuyTotal>0 && lastRebalIdx>=0){
+        let holdingsValue=0;
+        for(const code in holdings){
+          const e=etfByCode[code]; if(!e) continue;
+          const px=priceAtD(e,d); if(px!=null) holdingsValue+=holdings[code]*px;
+        }
+        rebalances[lastRebalIdx].periodReturn = (holdingsValue/lastBuyTotal-1)*100;
+      }
+      for(const code in holdings){
+        const e=etfByCode[code]; if(!e) continue;
+        const px=priceAtD(e,d); if(px==null) continue;
+        const sh=holdings[code], amt=sh*px, comm=amt*p.comm;
+        cash+=amt-comm; commission+=comm;
+        sells.push({code,name:e.name,price:px,shares:sh,amount:amt,comm});
+      }
+      holdings={};
+      if(top5.length>0){
+        const per=cash/top5.length;
+        for(const t of top5){
+          const px=t.priceAtD; if(px==null) continue;
+          const invest=per*(1-p.comm), sh=invest/px, comm=sh*px*p.comm;
+          // 关键：佣金也必须从现金扣除。原实现只扣本金（cash-=sh*px），佣金仅计入 commission 而未出账，
+          // 导致每期总资产凭空多出佣金金额并逐期复利，净值被系统性高估。
+          cash-=sh*px+comm;
+          holdings[t.code]=sh;
+          buys.push({code:t.code,name:t.name,price:px,shares:sh,amount:sh*px,comm});
+          commission+=comm;
+        }
+      }
+      // 调仓后市值 = 买入成本合计 + 剩余现金（此前表格直接复用「买入总额」，列名与内容不符）
+      const buyCost = buys.reduce((s,b)=>s+b.amount,0);
+      rebalances.push({date:d,type:'auto',sells,buys,commission,
+                       totalAfter: buyCost + cash, cashAfter: cash});
+      lastRebalIdx = rebalances.length-1;
+      lastBuyTotal = buyCost;
+    }
+    let total=cash;
+    for(const code in holdings){
+      const e=etfByCode[code]; if(!e) continue;
+      const px=priceAtD(e,d); if(px!=null) total+=holdings[code]*px;
+    }
+    nav.push({date:d,total});
+  }
+  // 最后一期尚未卖出：用最新交易日收盘价计算持有市值，得出本期收益
+  if(lastBuyTotal>0 && lastRebalIdx>=0 && !rebalances[lastRebalIdx].periodReturn){
+    let holdingsValue=0;
+    for(const code in holdings){
+      const e=etfByCode[code]; if(!e) continue;
+      const px=priceAtD(e,maxD); if(px!=null) holdingsValue+=holdings[code]*px;
+    }
+    rebalances[lastRebalIdx].periodReturn = (holdingsValue/lastBuyTotal-1)*100;
+  }
+  const finalTotal=nav.length?nav[nav.length-1].total:p.capital;
+  return {nav,rebalances,finalTotal,retPct:(finalTotal/p.capital-1)*100,capital:p.capital,fallback,startClamped,actualStart,
+          dataStart: allCal[0], dataEnd: maxD};
+}
+
+/* 基准曲线：从同源快照 benchmarks 取，归一化到 startDate 起=1.0
+   注意：不同基准源日期格式不同（AShareHub=YYYYMMDD，新浪/BaoStock=YYYY-MM-DD），
+   必须先 normalizeDate，否则带横杠日期与 startDate='20260811' 比较会全部失败、基准线不显示。 */
+function benchmarkSeries(bid, startDate){
+  const b = SNAP_BENCHMARKS && SNAP_BENCHMARKS[bid];
+  if(!b || !b.klines || !b.klines.length) return null;
+  const pairs=b.klines.map(k=>{
+    const p=k.split(',');
+    return {d:normalizeDate(p[0]), c:parseFloat(p[2])};
+  }).filter(x=>x.d && !isNaN(x.c));
+  if(!pairs.length) return null;
+  const dates=pairs.map(x=>x.d);
+  const closes=pairs.map(x=>x.c);
+  let idx=-1; for(let i=0;i<dates.length;i++){ if(dates[i]>=startDate){ idx=i; break; } }
+  if(idx<0) return null;
+  const sub=closes.slice(idx), subd=dates.slice(idx);
+  const base=sub[0];
+  // last：基准序列自身的最新日期，供 summary 判断基准是否落后于策略（实时升级失败时可见）
+  return {label:b.label, norm: sub.map((c,i)=>({date:subd[i], norm:c/base})), last: subd[subd.length-1]};
+}
+
+/* 手写 SVG 净值曲线：策略线(金) + 基准线(蓝虚线, 仅归一化模式) */
+function drawNavChart(sim, bench, mode){
+  if(!sim || !sim.nav || !sim.nav.length) return '<div style="color:var(--tx2);padding:20px;text-align:center;">暂无数据</div>';
+  const W=NAV_W, H=NAV_H, padL=NAV_PADL, padR=NAV_PADR, padT=NAV_PADT, padB=NAV_PADB;
+  const nav=sim.nav;
+  const n=nav.length;
+  let strat, benchPts=null;
+  if(mode==='norm'){
+    const base=nav[0].total;
+    strat=nav.map(n=>({date:n.date, v:n.total/base}));
+    benchPts = bench? bench.norm : null;
+  }else{
+    strat=nav.map(n=>({date:n.date, v:n.total}));
+  }
+  /* 基准按「日期」对齐到策略日历（原实现按下标 i 直接匹配两组序列，
+     当基准与策略的日期集合不同时整条蓝线会错位一格、tooltip 也会张冠李戴）。
+     对齐规则：对策略的第 i 天，取基准中日期 <= 该天的最近一条（前向填充）。 */
+  let benchAligned=null, benchStart=-1, benchEnd=-1;
+  if(benchPts && benchPts.length){
+    benchAligned=new Array(strat.length).fill(null);
+    let j=0;
+    for(let i=0;i<strat.length;i++){
+      const d=strat[i].date;
+      while(j<benchPts.length && benchPts[j].date<=d) j++;
+      if(j-1>=0) benchAligned[i]=benchPts[j-1].norm;
+    }
+    benchStart=benchAligned.findIndex(v=>v!=null);
+    for(let i=benchAligned.length-1;i>=0;i--){ if(benchAligned[i]!=null){ benchEnd=i; break; } }
+    if(benchStart<0) benchAligned=null;   // 整段无重叠：不画基准线
+  }
+  const allVals = strat.map(s=>s.v).concat(benchAligned?benchAligned.filter(v=>v!=null):[]);
+  let min=Math.min(...allVals), max=Math.max(...allVals);
+  if(min===max){ min-=0.01; max+=0.01; }
+  const baseRef = mode==='norm'?1:nav[0].total;
+
+  // 纵轴：归一化模式用百分比，动态间距（1%/2%/5%/10%）
+  let yTicks=[];
+  if(mode==='norm'){
+    const minPct=(min-baseRef)/baseRef*100, maxPct=(max-baseRef)/baseRef*100;
+    let step=1;
+    const span=Math.max(Math.abs(minPct),Math.abs(maxPct));
+    if(span>25) step=10;
+    else if(span>10) step=5;
+    else if(span>5) step=2;
+    else step=1;
+    const lo=Math.floor(minPct/step)*step, hi=Math.ceil(maxPct/step)*step;
+    min=baseRef*(1+lo/100); max=baseRef*(1+hi/100);
+    for(let p=lo;p<=hi;p+=step) yTicks.push({pct:p, v:baseRef*(1+p/100)});
+  }else{
+    const range=max-min;
+    for(let t=0;t<=4;t++) yTicks.push({v:min+range*t/4, label:'¥'+ (min+range*t/4).toFixed(0)});
+  }
+  const range=max-min||1;
+  const x=i=> padL + (n<=1?0:(i/(n-1))*(W-padL-padR));
+  const y=v=> padT + (1-(v-min)/range)*(H-padT-padB);
+
+  let grid='';
+  yTicks.forEach(tk=>{
+    const yy=y(tk.v);
+    grid += `<line x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}" stroke="${QC('line')}" stroke-width="1"/>`;
+    const lab = mode==='norm'? (tk.pct>=0?'+':'')+tk.pct.toFixed(0)+'%' : tk.label;
+    grid += `<text x="${padL-6}" y="${yy+4}" fill="${QC('tx2')}" font-size="10" text-anchor="end">${lab}</text>`;
+  });
+
+  // 横轴：完整日期 + 日期纵轴线（参考果仁网网格）
+  let xAxis='';
+  let xtickIdx;
+  if(n<=6){
+    xtickIdx=[...Array(n).keys()];
+  }else{
+    const count=Math.min(7, n);
+    xtickIdx=[];
+    for(let k=0;k<count;k++) xtickIdx.push(Math.round(k*(n-1)/(count-1)));
+  }
+  xtickIdx.forEach((i, pos)=>{
+    if(!nav[i]) return;
+    const tx=x(i);
+    // 纵轴网格线
+    xAxis += `<line x1="${tx}" y1="${padT}" x2="${tx}" y2="${H-padB}" stroke="${QC('line')}" stroke-width="1" stroke-dasharray="2 2"/>`;
+    const d=dashDate(nav[i].date);
+    const isFirst=pos===0, isLast=pos===xtickIdx.length-1;
+    let anchor='middle', tx2=tx;
+    if(isFirst){ anchor='start'; tx2=Math.max(tx2, padL+2); }
+    else if(isLast){ anchor='end'; tx2=Math.min(tx2, W-padR-2); }
+    xAxis += `<text x="${tx2}" y="${H-9}" fill="${QC('tx2')}" font-size="10" text-anchor="${anchor}">${d}</text>`;
+  });
+
+  const stratPts = strat.map((s,i)=>`${x(i).toFixed(1)},${y(s.v).toFixed(1)}`).join(' ');
+  // 基准线：只在有按日期对齐数据的区间绘制（不再按下标截断，避免蓝线凭空短一截/错位）
+  let benchLine='';
+  if(benchAligned && mode==='norm' && benchEnd>=benchStart){
+    const pts=[];
+    for(let i=benchStart;i<=benchEnd;i++) pts.push(`${x(i).toFixed(1)},${y(benchAligned[i]).toFixed(1)}`);
+    benchLine = `<polyline points="${pts.join(' ')}" fill="none" stroke="${QC('accent-l')}" stroke-width="1.6" stroke-dasharray="4 3"/>`;
+  }
+  const last=strat[strat.length-1];
+  const lastCol = last.v>=baseRef ? QC('up') : QC('dn');   // 涨红 跌绿（A股惯例）
+
+  // 鼠标悬停数据（基准用同一套按日期对齐的结果）
+  const tipData = strat.map((s,i)=>({
+    date:s.date,
+    strat:{v:s.v, pct:(mode==='norm'?(s.v-baseRef)/baseRef*100:(s.v/baseRef-1)*100)},
+    bench: (benchAligned && benchAligned[i]!=null) ? {v:benchAligned[i], pct:(benchAligned[i]-1)*100} : null
+  }));
+  const tipJson = JSON.stringify(tipData).replace(/"/g,'&quot;');
+
+  return `<div class="nav-chart-wrap" style="position:relative;overflow:visible;">
+    <svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block;overflow:visible;"
+         data-tip="${tipJson}" data-mode="${mode}" data-bench-label="${bench?(bench.label||'基准'):''}"
+         onmousemove="showNavTip(event,this)" onmouseleave="hideNavTip(this)">
+      ${grid}${xAxis}
+      <polyline points="${stratPts}" fill="none" stroke="${QC('gold')}" stroke-width="2"/>
+      ${benchLine}
+      <circle cx="${x(strat.length-1)}" cy="${y(last.v)}" r="3.5" fill="${lastCol}"/>
+      <text x="${x(strat.length-1)-4}" y="${y(last.v)-8}" fill="${lastCol}" font-size="11" text-anchor="end">${mode==='norm'?((last.v-1)*100).toFixed(2)+'%':'¥'+last.v.toFixed(0)}</text>
+    </svg>
+    <div class="nav-tooltip" style="display:none;position:absolute;pointer-events:none;padding:8px 10px;border-radius:var(--radius-sm);font-size:12px;line-height:1.6;z-index:10;background:var(--bg2);color:var(--tx);border:1px solid var(--line);box-shadow:0 4px 12px rgba(0,0,0,.2);min-width:120px;"></div>
+  </div>`;
+}
+
+/* 净值图鼠标悬停 tooltip（参考果仁网：日期 + 色块 + 名称 + 收益率） */
+function showNavTip(evt, svg){
+  const wrap=svg.parentElement;
+  const tip=wrap.querySelector('.nav-tooltip');
+  if(!tip) return;
+  const raw=svg.getAttribute('data-tip');
+  if(!raw) return;
+  let data; try{ data=JSON.parse(raw.replace(/&quot;/g,'"')); }catch(e){ return; }
+  const benchLabel=svg.getAttribute('data-bench-label')||'基准';
+  const rect=svg.getBoundingClientRect();
+  // 必须与 drawNavChart 的坐标系一致（原为 58/18，与绘图的 48/30 不符，导致悬停日期错位）
+  const W=NAV_W, padL=NAV_PADL, padR=NAV_PADR;
+  const mx=evt.clientX-rect.left;
+  const plotLeft=rect.width*padL/W;
+  const plotRight=rect.width*(W-padR)/W;
+  let i=0;
+  if(data.length>1 && plotRight>plotLeft){
+    const frac=Math.max(0,Math.min(1,(mx-plotLeft)/(plotRight-plotLeft)));
+    i=Math.round(frac*(data.length-1));
+  }
+  i=Math.max(0,Math.min(i,data.length-1));
+  const d=data[i];
+  const pct=v=>(v>=0?'+':'')+v.toFixed(2)+'%';
+  let html=`<div style="font-weight:700;margin-bottom:4px;white-space:nowrap;">${dashDate(d.date)}</div>`;
+  html+=`<div style="display:flex;align-items:center;gap:6px;white-space:nowrap;"><span style="display:inline-block;width:8px;height:8px;background:${QC('gold')};border-radius:2px;flex-shrink:0;"></span><span>策略</span><span style="margin-left:auto;font-weight:700;">${pct(d.strat.pct)}</span></div>`;
+  if(d.bench){
+    html+=`<div style="display:flex;align-items:center;gap:6px;white-space:nowrap;margin-top:2px;"><span style="display:inline-block;width:8px;height:8px;background:${QC('accent-l')};border-radius:2px;flex-shrink:0;"></span><span>${benchLabel}</span><span style="margin-left:auto;font-weight:700;">${pct(d.bench.pct)}</span></div>`;
+  }
+  tip.innerHTML=html;
+  tip.style.display='block';
+  const tipW=tip.offsetWidth, tipH=tip.offsetHeight;
+  const wrapRect=wrap.getBoundingClientRect();
+  let left=evt.clientX-wrapRect.left+12;
+  let top=evt.clientY-wrapRect.top-tipH-8;
+  if(left+tipW>wrapRect.width) left=evt.clientX-wrapRect.left-tipW-12;
+  if(top<0) top=evt.clientY-wrapRect.top+12;
+  tip.style.left=left+'px';
+  tip.style.top=top+'px';
+}
+function hideNavTip(svg){
+  const wrap=svg.parentElement;
+  const tip=wrap.querySelector('.nav-tooltip');
+  if(tip) tip.style.display='none';
+}
+
+/* 调仓记录表：紧凑主表 + 点击展开明细（设计点 A：用户已确认） */
+function renderRebalanceTable(rebalances){
+  const hint = '<div style="color:var(--tx2);font-size:12px;padding:4px 0 8px;">提示：「自动」为由K线数据确定性回测的模拟调仓（非真实下单）；下表仅列出有实际买入/卖出的调仓日。</div>';
+  if(!rebalances || !rebalances.length) return hint+'<div style="color:var(--tx2);padding:10px 0;">暂无调仓记录（若起始日后尚无调仓日，请稍候或检查起始日）</div>';
+  // 仅保留有实际买卖的记录（隐藏无交易的回测检查日）
+  const real = rebalances.filter(r=>r.sells.length || r.buys.length);
+  if(!real.length) return hint+'<div style="color:var(--tx2);padding:10px 0;">起始日后尚无达标前5产生的实际调仓（策略空仓观望中）。</div>';
+  const rows = real.map((r,i)=>{
+    const buyCodes = r.buys.map(b=>b.name).join('、')||'—';
+    const buyAmt = r.buys.reduce((s,b)=>s+b.amount,0);
+    // 调仓后市值 = 买入成本 + 剩余现金（旧值直接等于 buyAmt，列名与实际内容不符）
+    const totalAfter = (r.totalAfter!=null) ? r.totalAfter : buyAmt;
+    const pr = r.periodReturn;
+    const prText = (pr==null || isNaN(pr)) ? '—' : (pr>=0?'+':'')+pr.toFixed(2)+'%';
+    const prCol = (pr==null || isNaN(pr)) ? 'var(--tx2)' : (pr>=0?QC('up'):QC('dn'));
+    const detail = `<div class="rb-detail">
+        <div class="rb-sub">卖出（${r.sells.length} 只）</div>
+        ${r.sells.length? r.sells.map(s=>`<div>${s.name} · ${s.price.toFixed(3)} × ${s.shares.toFixed(0)} = ¥${s.amount.toFixed(2)}（佣¥${s.comm.toFixed(2)}）</div>`).join('') : '<div style="color:var(--tx2)">—（建仓，无卖出）</div>'}
+        <div class="rb-sub">买入（${r.buys.length} 只 · 等权前5）</div>
+        ${r.buys.length? r.buys.map(b=>`<div>${b.name} · ${b.price.toFixed(3)} × ${b.shares.toFixed(0)} = ¥${b.amount.toFixed(2)}（佣¥${b.comm.toFixed(2)}）</div>`).join('') : '<div style="color:var(--tx2)">无</div>'}
+      </div>`;
+    return `<tr class="rb-row" onclick="toggleRb(${i})" style="cursor:pointer;">
+        <td>${r.date}</td>
+        <td><span class="state-tag ${r.type==='manual'?'st-fail':'st-target'}">${r.type==='manual'?'手动':'自动'}</span></td>
+        <td style="text-align:left">${buyCodes}</td>
+        <td style="color:${prCol};font-weight:700;">${prText}</td>
+        <td>¥${buyAmt.toFixed(0)}</td>
+        <td>¥${r.commission.toFixed(2)}</td>
+        <td>¥${totalAfter.toFixed(0)}</td>
+      </tr>
+      <tr class="rb-detail-row" id="rbd-${i}" style="display:none;"><td colspan="7">${detail}</td></tr>`;
+  }).join('');
+  return hint+`<table class="table rb-table"><thead><tr>
+      <th>调仓日</th><th>类型</th><th>买入标的(前5)</th><th>本期收益</th><th>买入总额</th><th>佣金</th><th>调仓后市值</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+}
+function toggleRb(i){ const el=document.getElementById('rbd-'+i); if(el) el.style.display = el.style.display==='none'?'table-row':'none'; }
+
+/* 导出 CSV（设计点 B：用户已确认） */
+function exportNavCSV(sim, p){
+  if(!sim || !sim.nav || !sim.nav.length){ showToast('暂无数据可导出'); return; }
+  const base=sim.nav[0].total;
+  const rbMap={}; sim.rebalances.forEach(r=>rbMap[r.date]=(r.type==='manual'?'手动调仓':'自动调仓'));
+  let csv='日期,总资产(元),归一化净值,操作\n';
+  sim.nav.forEach(n=>{ csv += `${n.date},${n.total.toFixed(2)},${(n.total/base).toFixed(4)},${rbMap[n.date]||''}\n`; });
+  csv += '\n调仓明细\n日期,类型,动作,标的,价格,份额,金额,佣金\n';
+  sim.rebalances.forEach(r=>{
+    r.sells.forEach(s=>{ csv += `${r.date},${r.type==='manual'?'手动':'自动'},卖出,${s.name},${s.price.toFixed(3)},${s.shares.toFixed(0)},${s.amount.toFixed(2)},${s.comm.toFixed(2)}\n`; });
+    r.buys.forEach(b=>{ csv += `${r.date},${r.type==='manual'?'手动':'自动'},买入,${b.name},${b.price.toFixed(3)},${b.shares.toFixed(0)},${b.amount.toFixed(2)},${b.comm.toFixed(2)}\n`; });
+    if(!r.sells.length && !r.buys.length) csv += `${r.date},${r.type==='manual'?'手动':'自动'},无,--,--,--,--,--\n`;
+  });
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='净值记录_'+p.start+'.csv';
+  a.style.display='none'; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 1500);   // 回收，避免反复导出累积内存
+  showToast('已导出 CSV');
+}
+
+/* 手动真实持仓登记：用户盘后实际调仓后登记日期，页面据当时前5自动生成真实曲线(叠加对比) */
+function navRegisterRebal(){
+  const cal=buildCalendar();
+  if(!cal.length){ showToast('暂无行情数据，请先点「立即刷新」'); return; }
+  // 优先登记「今天」（需为行情日历内的交易日），否则回退到日历最后一个交易日。
+  // 原实现直接用日历最后一天：快照若停留在过去（如 8/28 而今天是 9/20），会把登记日静默写成 8/28。
+  // 另：原兜底用 toISOString()（UTC），在东八区 08:00 前会返回前一天，一并去掉。
+  const now=new Date();
+  const today=now.getFullYear()+String(now.getMonth()+1).padStart(2,'0')+String(now.getDate()).padStart(2,'0');
+  const isToday = cal.includes(today);
+  const day = isToday ? today : cal[cal.length-1];
+  const recs=loadManualRecords();
+  if(recs.includes(day)){ showToast('该调仓日('+dashDate(day)+')已登记'); return; }
+  recs.push(day); saveManualRecords(recs);
+  showToast('已登记调仓日 '+dashDate(day)+(isToday?'（今日）':'（非交易日，取最近交易日）')+'，按当时前5严格策略生成');
+  renderNav();
+}
+function navClearManual(){
+  saveManualRecords([]); showToast('已清空手动登记'); renderNav();
+}
+
+/* 主渲染：读取参数 → 模拟 → 画图表/表/汇总，并同步控件 */
+async function renderNav(){
+  const p = loadNavParams();
+  // 起始日解析（关键修复：避免旧持久化起始日 / 日期格式问题制造大量虚假回测记录）
+  const lt = latestTradeDate();
+  if(p.mode==='manual'){
+    // 手动模式：从最早登记日起算，使净值曲线覆盖全部已登记历史（而非被 latest 截断成 1 天）
+    const recs = loadManualRecords();
+    p.start = recs.length ? recs.slice().sort()[0] : (lt || '__AUTO__');
+  } else {
+    // 自动模式：默认从策略锚点(2026-08-11)起算，覆盖完整历史调仓；
+    // 只有用户明确设置过起始日（userStartSet 已持久化，跨刷新保留）才尊重其设置，
+    // 否则旧的 localStorage 起始日会截断历史曲线。清空输入框即可恢复默认。
+    if(p.start==='__AUTO__' || !p.start || !p.userStartSet){
+      p.start = NAV_ANCHOR_START;
+    }
+  }
+  if(p.start==='__AUTO__' && lt) p.start = lt;
+  const $ = id=>document.getElementById(id);
+  if($('navStart')) $('navStart').value = (p.start && p.start!=='__AUTO__') ? dashDate(p.start) : '';
+  // 手动模式下起始日由登记记录决定，输入框改为只读并说明，避免用户改了却被静默覆盖
+  if($('navStart')){
+    const isManual = p.mode==='manual';
+    $('navStart').disabled = isManual;
+    $('navStart').title = isManual ? '手动登记模式下起始日由最早登记日自动决定' : '';
+  }
+  if($('navCapital')) $('navCapital').value=p.capital;
+  if($('navRebal')) $('navRebal').value=p.rebal;
+  if($('navComm')) $('navComm').value=(p.comm*10000);
+  if($('navBench')) $('navBench').value=p.bench;
+  if($('navChartMode')) $('navChartMode').value = (window.__navChartMode||'norm');
+  document.querySelectorAll('input[name=navMode]').forEach(r=>r.checked=(r.value===p.mode));
+
+  await loadSnapshot();   // 确保基准(同源快照)可用
+  let manualSet=new Set();
+  let rebalDays=null;
+  if(p.mode==='manual'){
+    const recs=loadManualRecords();
+    rebalDays = recs.length? recs : null;     // 空则让引擎按 actualStart 自动算
+    manualSet = new Set(recs);
+  }
+  const sim = simulateNav(p, rebalDays);      // rebalDays=null 时内部按 actualStart 自动生成
+  if(sim.rebalances) sim.rebalances.forEach(r=>{ if(manualSet.has(r.date)) r.type='manual'; });
+
+  const chartMode = window.__navChartMode || 'norm';
+  // 基准起点必须与策略曲线的实际起点一致（用 sim.actualStart），否则两条线起点不同日期会整体错位
+  const benchNorm = benchmarkSeries(p.bench, (sim && sim.actualStart) || p.start);
+  if($('navChart')) $('navChart').innerHTML = drawNavChart(sim, benchNorm, chartMode);
+  if($('navSummary')){
+    if(sim.error){ $('navSummary').innerHTML='<span style="color:var(--up)">'+sim.error+'</span>'; }
+    else{
+      const f=sim.finalTotal||p.capital, ret=sim.retPct||0;
+      const endD = sim.nav? sim.nav[sim.nav.length-1].date : '';
+      const realCnt = sim.rebalances? sim.rebalances.filter(r=>r.sells.length||r.buys.length).length : 0;
+      let html = `期末总资产 <b style="color:var(--gold)">¥${f.toFixed(3)}</b> ｜ 累计收益 <b style="color:${ret>=0?QC('up'):QC('dn')}">${ret>=0?'+':''}${ret.toFixed(2)}%</b> ｜ 实际调仓 ${realCnt} 次 ｜ 区间 ${sim.actualStart} ~ ${endD}`;
+      if(chartMode==='norm' && benchNorm){
+        html += ` ｜ <span style="display:inline-flex;align-items:center;gap:4px;font-size:12.5px;"><span style="display:inline-block;width:8px;height:8px;background:${QC('gold')};border-radius:2px;"></span>策略</span>`;
+        html += ` <span style="display:inline-flex;align-items:center;gap:4px;font-size:12.5px;"><span style="display:inline-block;width:8px;height:8px;background:${QC('accent-l')};border-radius:2px;"></span>${benchNorm.label||'基准'}</span>`;
+      }
+      if(sim.fallback) html += ` ｜ <span style="color:var(--gold)">注：起始日 ${p.start} 晚于最新行情，已用最新交易日 ${sim.actualStart} 演示</span>`;
+      if(sim.startClamped) html += ` ｜ <span style="color:var(--gold)">注：起始日早于可用行情起点，已从 ${sim.actualStart} 起算</span>`;
+      // 基准落后提示：数据源为快照且实时基准升级失败时，蓝线会短于策略线，这里显式告知
+      if(chartMode==='norm' && benchNorm && benchNorm.last && sim.nav && sim.nav.length){
+        const endD2 = sim.nav[sim.nav.length-1].date;
+        if(normalizeDate(benchNorm.last) < endD2){
+          html += ` ｜ <span style="color:var(--gold)">基准数据截至 ${benchNorm.last}，未同步到最新交易日（实时通道未取到该基准）</span>`;
+        }
+      }
+      $('navSummary').innerHTML = html;
+    }
+  }
+  if($('navRebTable')) $('navRebTable').innerHTML = renderRebalanceTable(sim.rebalances);
+  // 策略概览：现有持仓 = 最新一笔有买入的系统调仓标的（与 调仓记录 买入标的名称一致）；
+  //           下次调仓日 = 该调仓日 + rebal 个交易日。
+  const realReb = (sim.rebalances && sim.rebalances.length) ? sim.rebalances.filter(r=>r.buys && r.buys.length) : [];
+  const lastReb = realReb.length ? realReb[realReb.length-1] : null;
+  const $ovH=document.getElementById('ovHoldings'), $ovN=document.getElementById('ovNextRebal');
+  if($ovH){
+    if(lastReb){
+      $ovH.innerHTML = lastReb.buys.map(b=>`<span class="ov-chip">${b.name}<span class="c">${b.code}</span></span>`).join('');
+    }else{
+      $ovH.innerHTML = '<span style="color:var(--tx2);font-weight:500;">空仓（暂无系统调仓记录）</span>';
+    }
+  }
+  if($ovN){
+    const base = lastReb ? lastReb.date : (sim.actualStart || p.start);
+    $ovN.textContent = nextTradingDate(base, p.rebal);
+  }
+  if($('navExportBtn')) $('navExportBtn').onclick=()=>exportNavCSV(sim,p);
+  if($('navChartMode')) $('navChartMode').onchange=()=>{ window.__navChartMode=$('navChartMode').value; renderNav(); };
+}
+
+/* 参数变更：保存并重渲染 */
+function onNavParamChange(ev){
+  const p=loadNavParams();
+  const $=id=>document.getElementById(id);
+  if($('navStart')){
+    const raw=$('navStart').value;
+    const nd=normalizeDate(raw);                   // type=date 返回 YYYY-MM-DD，必须规范化
+    if(nd){ p.start=nd; p.userStartSet=true; }
+    else if(!raw){ p.start='__AUTO__'; p.userStartSet=false; }   // 清空输入框 = 恢复默认锚点
+    // 仅当用户真正改了「起始日」输入框时，才尊重其输入（避免旧持久化值制造大量历史回测）
+    if(ev && ev.target && ev.target.id==='navStart') window.__navStartExplicit=true;
+  }
+  // 参数护栏：非法值一律忽略并保留原值，避免死循环（rebal<1）、净值失真（capital<0）、凭空生钱（comm<0）
+  if($('navCapital')){
+    const v=parseFloat($('navCapital').value);
+    if(isFinite(v) && v>0) p.capital=v;
+  }
+  if($('navRebal')){
+    const v=parseInt($('navRebal').value,10);
+    if(isFinite(v) && v>=1) p.rebal=v; else showToast('调仓间隔需为 ≥1 的整数，已忽略该输入');
+  }
+  if($('navComm')){
+    const v=parseFloat($('navComm').value);
+    if(isFinite(v) && v>=0) p.comm=v/10000; else showToast('佣金不能为负，已忽略该输入');
+  }
+  if($('navBench')) p.bench=$('navBench').value;
+  const m=document.querySelector('input[name=navMode]:checked'); if(m) p.mode=m.value;
+  saveNavParams(p);
+  renderNav();
+}
+
+function init(){
+  const $f=id=>document.getElementById(id);
+  if($f('appVer')) $f('appVer').textContent = APP_VERSION;
+  if($f('buildTime')){
+    const bt = BUILD_TIME.indexOf('__')===0 ? (new Date().toLocaleString('zh-CN',{hour12:false})+'（本地预览）') : BUILD_TIME;
+    $f('buildTime').textContent = bt;
+  }
+  // 兜底：加载/渲染异常时给出可见状态，避免页面永远停在「正在初始化…」（原实现无 catch → 静默 unhandled rejection）
+  loadAndRender().catch(e=>{
+    setStatus('error','初始化异常：'+(e&&e.message?e.message:'未知错误')+'，请点「立即刷新」重试');
+  });
+  // 云同步：独立于行情加载，失败也只是回落本机保存（状态条会写明），不影响页面其余功能
+  try{ initCloudBar(); }catch(e){ setCloudBar('err','云同步初始化异常：'+(e&&e.message?e.message:'未知错误')+' · 当前仅本机保存'); }
+}
+init();
+</script>
+</body>
+</html>

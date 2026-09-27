@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>量化策略看板 · 汇总</title>
+<meta name="description" content="个人量化研究：三个策略监控看板的统一入口。不构成任何投资建议。">
+<link rel="stylesheet" href="theme.css">
+<style>
+  .hub-head{margin-bottom:22px}
+  .hub-head .q-h1{margin-bottom:6px}
+  .hub-grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+
+  /* ── 策略卡：整卡可点，用 <a> 而非 <button>，支持新标签页打开 ── */
+  .hub{
+    display:flex;flex-direction:column;position:relative;
+    background:var(--panel);border:1px solid var(--line);
+    border-top:3px solid var(--c,var(--accent));
+    border-radius:var(--radius);box-shadow:var(--shadow);
+    padding:20px 22px 18px;
+    color:inherit;text-decoration:none;
+    transition:background .15s,border-color .15s,transform .15s;
+  }
+  .hub:hover{background:var(--panel2);border-color:var(--line2);border-top-color:var(--c,var(--accent));transform:translateY(-2px)}
+  .hub:focus-visible{outline:2px solid var(--c,var(--accent));outline-offset:2px}
+
+  .hub .top{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+  .hub .idx{
+    font:500 11px/1 var(--mono);color:var(--tx3);
+    border:1px solid var(--line2);border-radius:4px;padding:3px 6px;
+  }
+  .hub h2{margin:0 0 8px;font-size:17px;font-weight:500;line-height:1.4;letter-spacing:.2px}
+  .hub .desc{margin:0;font-size:13px;line-height:1.7;color:var(--tx2);flex:1}
+  .hub .facts{
+    margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);
+    display:flex;flex-direction:column;gap:5px;
+  }
+  .hub .fact{display:flex;gap:10px;font-size:12px;line-height:1.6}
+  .hub .fact .k{flex:0 0 52px;color:var(--tx3)}
+  .hub .fact .v{flex:1;color:var(--tx2);font-variant-numeric:tabular-nums}
+  .hub .foot{
+    margin-top:16px;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  }
+  .hub .src{font-size:11px;color:var(--tx3)}
+  .hub .go{
+    font-size:13px;font-weight:500;color:var(--c,var(--accent));
+    display:inline-flex;align-items:center;gap:4px;transition:gap .15s;
+  }
+  .hub:hover .go{gap:8px}
+
+  @media (max-width:640px){
+    .q-wrap{padding:18px 14px 40px}
+    .hub{padding:18px}
+    .hub h2{font-size:16px}
+  }
+</style>
+</head>
+<body>
+
+<main class="q-wrap">
+
+  <header class="hub-head">
+    <h1 class="q-h1">量化策略看板</h1>
+    <p class="q-sub">
+      三个策略监控与择时看板的统一入口 · 数据由各页自行实时获取
+    </p>
+  </header>
+
+  <div class="q-note q-note-warn" style="margin-bottom:22px">
+    本站仅用于个人量化研究与记录，<strong style="color:#ff8a8a">不构成任何投资建议</strong>。投资有风险，入市需谨慎。
+  </div>
+
+  <div class="hub-grid">
+
+    <!-- ① MACD-V -->
+    <a class="hub" href="macdv-monitor/" style="--c:#4d8bff">
+      <div class="top">
+        <span class="idx">01</span>
+        <span class="q-pill q-pill-accent">动量 · 双周期</span>
+      </div>
+      <h2>MACD-V 波动率标准化动量监控</h2>
+      <p class="desc">
+        把 MACD 用 ATR 标准化，消除波动率对动量读数的影响，
+        按 ±50 / ±150 分档判断超买超卖阶段，并追踪信号变化。
+      </p>
+      <div class="facts">
+        <div class="fact"><span class="k">标的</span><span class="v">11 只</span></div>
+        <div class="fact"><span class="k">周期</span><span class="v">日线 / 周线双周期</span></div>
+        <div class="fact"><span class="k">参数</span><span class="v">EMA12 / EMA26 / ATR26</span></div>
+      </div>
+      <div class="foot">
+        <span class="src">腾讯财经 · 东方财富</span>
+        <span class="go">进入 <span aria-hidden="true">→</span></span>
+      </div>
+    </a>
+
+    <!-- ② 双因子轮动 -->
+    <a class="hub" href="dual-factor-rotation/" style="--c:#f0a020">
+      <div class="top">
+        <span class="idx">02</span>
+        <span class="q-pill q-pill-gold">轮动 · 双因子</span>
+      </div>
+      <h2>双因子轮动策略</h2>
+      <p class="desc">
+        以 20 日乖离率衡量动量、60 日波动率衡量风险，双因子综合打分排名，
+        定期从统一池中轮动换仓。
+      </p>
+      <div class="facts">
+        <div class="fact"><span class="k">池子</span><span class="v">统一池 · 12 ETF</span></div>
+        <div class="fact"><span class="k">因子</span><span class="v">动量 BIAS20 + 低波动 Vol60</span></div>
+        <div class="fact"><span class="k">口径</span><span class="v">后复权 · 果仁口径</span></div>
+      </div>
+      <div class="foot">
+        <span class="src">东财 / 腾讯 / 同源快照</span>
+        <span class="go">进入 <span aria-hidden="true">→</span></span>
+      </div>
+    </a>
+
+    <!-- ③ 红利收益差择时 -->
+    <a class="hub" href="dividend-spread-timing/" style="--c:#f0883e">
+      <div class="top">
+        <span class="idx">03</span>
+        <span class="q-pill" style="background:rgba(240,136,62,.16);border-color:rgba(240,136,62,.35);color:#ff9d6b">择时 · 收益差</span>
+      </div>
+      <h2>中证红利 40 日收益差择时看板</h2>
+      <p class="desc">
+        用中证红利全收益与市场的 40 日收益差（相对强弱）作为择时信号，
+        对比年线分档与分层卖线多套方案的历史表现。
+      </p>
+      <div class="facts">
+        <div class="fact"><span class="k">指标</span><span class="v">40 日收益差 · 年线 242 日</span></div>
+        <div class="fact"><span class="k">方案</span><span class="v">简单版 / 组合版 P0–P5</span></div>
+        <div class="fact"><span class="k">更新</span><span class="v">交易日 16:30 自动更新</span></div>
+      </div>
+      <div class="foot">
+        <span class="src">Wind · 中证全指代理</span>
+        <span class="go">进入 <span aria-hidden="true">→</span></span>
+      </div>
+    </a>
+
+  </div>
+
+  <footer class="q-footer">
+    <div>© 2026 · 个人量化研究 · 本站与三个策略页共用同一套设计主题</div>
+    <div class="risk">风险提示：以上内容均为个人策略研究与记录，不构成任何投资建议。</div>
+  </footer>
+
+</main>
+
+</body>
+</html>

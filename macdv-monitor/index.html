@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="AYLDzkpjwwAqKXXR18BdaO">
+<head data-page-node-id="2Ho1mGRomSSVSBH53M9LS6">
+<meta charset="utf-8" data-page-node-id="5E20Vv3mKvqc8hjLzWbXGl">
+<meta name="viewport" content="width=device-width,initial-scale=1" data-page-node-id="cRZvxHDg5TIAtKjLH4U8WG">
+<title>MACD-V 波动率标准化动量监控</title>
+<link rel="stylesheet" href="../theme.css">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--tx);
+  font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:var(--maxw-wide);margin:0 auto;padding:18px 20px 40px}
+
+/* ── header ── */
+.hd{display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px;margin-bottom:14px}
+.hd h1{font-size:19px;margin:0;letter-spacing:.5px}
+.hd h1 span{color:var(--tx3);font-size:12px;font-weight:400;margin-left:8px;letter-spacing:0}
+.formula{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:12px;color:var(--tx2);background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--radius-sm);padding:5px 10px;
+}
+.hd .spacer{flex:1}
+
+.ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.btn{
+  background:var(--panel2);color:var(--tx);border:1px solid var(--line2);
+  border-radius:var(--radius-sm);padding:6px 12px;font-size:13px;cursor:pointer;
+  font-family:inherit;transition:.15s;white-space:nowrap;
+}
+.btn:hover{background:var(--panel-h);border-color:var(--line2)}
+.btn:disabled{opacity:.5;cursor:default}
+.btn.pri{background:var(--accent);border-color:var(--accent)}
+.btn.pri:hover{background:var(--accent-h)}
+select.btn{padding:6px 8px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--tx3);display:inline-block;margin-right:6px;vertical-align:middle}
+.dot.ok{background:var(--dn)}.dot.warn{background:var(--warn)}.dot.err{background:var(--up)}
+.meta{font-size:12px;color:var(--tx2);white-space:nowrap}
+.meta b{color:var(--tx);font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:var(--radius-sm);overflow:hidden}
+.seg button{
+  background:var(--panel2);color:var(--tx2);border:0;padding:6px 11px;
+  font-size:12px;cursor:pointer;font-family:inherit;border-right:1px solid var(--line2);
+}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--accent);color:#fff}
+.chk{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--tx2);cursor:pointer;user-select:none}
+.chk input{accent-color:var(--accent);width:14px;height:14px;margin:0}
+
+/* ── summary ── */
+.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;position:relative;overflow:hidden}
+.card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--tx3)}
+.card.c-ob::before{background:var(--up)} .card.c-up::before{background:var(--warn)}
+.card.c-mid::before{background:var(--tx3)} .card.c-dn::before{background:var(--dn)}
+.card.c-os::before{background:var(--dn)}
+.card .lb{font-size:12px;color:var(--tx2);display:flex;justify-content:space-between;align-items:baseline}
+.card .lb i{font-style:normal;font-size:11px;color:var(--tx3)}
+.card .nums{display:flex;gap:14px;margin-top:6px;align-items:baseline}
+.card .nums div{font-size:11px;color:var(--tx3)}
+.card .nums b{display:block;font-size:21px;font-weight:700;line-height:1.15;font-variant-numeric:tabular-nums}
+.card.c-ob .nums b{color:var(--up)} .card.c-up .nums b{color:var(--warn)}
+.card.c-mid .nums b{color:var(--tx2)} .card.c-dn .nums b{color:var(--dn)}
+.card.c-os .nums b{color:var(--dn)}
+
+.alerts{
+  background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--warn);
+  border-radius:var(--radius);padding:9px 13px;margin-bottom:14px;font-size:13px;
+  display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;
+}
+.alerts.none{border-left-color:var(--line2);color:var(--tx3)}
+.alerts .t{color:var(--tx2);font-size:12px}
+.alerts .ch{display:inline-flex;align-items:center;gap:5px;background:var(--panel2);border:1px solid var(--line2);border-radius:var(--radius-pill);padding:3px 10px;font-size:12px}
+.alerts .ch em{font-style:normal;color:var(--tx3)}
+.alerts .ch b{font-weight:600}
+.tagd{font-size:10px;color:var(--tx2);background:var(--panel2);border:1px solid var(--line2);border-radius:3px;padding:0 4px;margin-left:4px}
+
+/* ── table ── */
+.tbwrap{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:auto}
+table{border-collapse:separate;border-spacing:0;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:0;text-align:right;white-space:nowrap}
+thead th{
+  position:sticky;top:0;z-index:2;background:var(--panel2);
+  font-size:11px;color:var(--tx2);font-weight:600;letter-spacing:.3px;
+  border-bottom:1px solid var(--line2);padding:7px 10px;
+}
+thead th.grp{text-align:center;color:var(--tx);font-size:12px;letter-spacing:1px}
+thead tr:first-child th{background:var(--panel3);border-bottom:1px solid var(--line);height:32px;padding:0 10px;line-height:31px}
+thead tr:nth-child(2) th{top:32px}
+thead th.grp.day{color:var(--accent-l)} thead th.grp.wk{color:var(--accent)}
+thead tr:nth-child(2) th.wkx{background:rgba(31,111,235,.08);box-shadow:inset 0 -1px 0 rgba(31,111,235,.22)}
+thead tr:nth-child(2) th.wkx:hover{color:var(--accent-l)}
+/* 周线信号速览行 */
+.sigrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:var(--radius);padding:8px 13px;margin-bottom:12px;font-size:12px}
+.sigrow .t{color:var(--tx2);font-size:12px;margin-right:2px;white-space:nowrap}
+.sigrow .cnt{display:inline-flex;align-items:center;gap:5px;background:var(--panel2);border:1px solid var(--line2);border-radius:var(--radius-pill);padding:2px 10px;font-size:12px}
+.sigrow .cnt b{font-weight:700;font-variant-numeric:tabular-nums}
+.sigrow .cnt.act{border-color:var(--accent);box-shadow:none}
+.sigrow .cnt .tick{font-size:10px;color:var(--tx3)}
+.sigrow .none-msg{color:var(--tx3);font-size:12px}
+th.srt{cursor:pointer;user-select:none}
+th.srt:hover{color:var(--tx)}
+th.srt .ar{opacity:.35;margin-left:3px;font-size:9px}
+th.srt.act .ar{opacity:1;color:var(--accent-l)}
+th.l,td.l{text-align:left}
+tbody td{border-bottom:1px solid var(--line);padding:8px 10px;font-size:13px}
+tbody tr:hover td{background:var(--row-h)}
+tbody tr.expanded td{background:var(--row-h)}
+tbody tr.det td{background:var(--row-det);border-bottom:1px solid var(--line);padding:0}
+tbody tr.det-hidden{display:none}
+
+.c-code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:var(--tx2)}
+.c-name{font-weight:600}
+.c-price{font-weight:600}
+.c-pct{font-size:12px}
+.up{color:var(--up)} .dn{color:var(--dn)} .flat{color:var(--tx2)}
+
+.exp{
+  cursor:pointer;color:var(--tx3);font-size:10px;padding:0 6px;
+  display:inline-block;transition:transform .15s;user-select:none;
+}
+.exp.open{transform:rotate(90deg);color:var(--accent-l)}
+
+/* MACD-V 数值单元 */
+.mv{display:inline-flex;flex-direction:column;align-items:flex-end;min-width:64px;padding:3px 8px;border-radius:var(--radius-sm);border:1px solid transparent}
+.mv .v{font-size:16px;font-weight:700;line-height:1.15;letter-spacing:.2px}
+.mv .s{font-size:10px;color:var(--tx3);margin-top:1px}
+.mv.ob{background:var(--upb);border-color:rgba(255,77,79,.45)}
+.mv.os{background:var(--dnb);border-color:rgba(30,199,125,.45)}
+.mv.upz{background:var(--upz);border-color:rgba(255,77,79,.22)}
+.mv.dnz{background:var(--dnz);border-color:rgba(30,199,125,.22)}
+.mv .v.up{color:var(--up)} .mv .v.dn{color:var(--dn)}
+.mv.ob .v{text-shadow:0 0 12px rgba(255,77,79,.5)}
+.mv.os .v{text-shadow:0 0 12px rgba(30,199,125,.5)}
+.sub{font-size:12px;color:var(--tx2)}
+.sub.dim{color:var(--tx3)}
+.badge{
+  display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:var(--radius-pill);
+  border:1px solid transparent;letter-spacing:.3px;
+}
+.badge.ob{background:rgba(255,77,79,.18);color:var(--up);border-color:rgba(255,77,79,.5)}
+.badge.up{background:rgba(255,138,92,.13);color:var(--warn);border-color:rgba(255,138,92,.32)}
+.badge.mid{background:var(--panel2);color:var(--tx3);border-color:var(--line2)}
+.badge.dn{background:rgba(79,209,165,.13);color:var(--dn);border-color:rgba(79,209,165,.32)}
+.badge.os{background:rgba(30,199,125,.18);color:var(--dn);border-color:rgba(30,199,125,.5)}
+.badge.na{background:var(--panel2);color:var(--tx3);border-color:var(--line2)}
+.tchip{
+  display:inline-block;font-size:11px;font-weight:600;padding:2px 7px;border-radius:var(--radius-sm);
+  font-variant-numeric:tabular-nums;border:1px solid transparent;cursor:help;
+}
+.tchip.up{background:rgba(255,77,79,.16);color:var(--up);border-color:rgba(255,77,79,.4)}
+.tchip.dn{background:rgba(30,199,125,.14);color:var(--dn);border-color:rgba(30,199,125,.38)}
+.sig{
+  display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:var(--radius-sm);
+  letter-spacing:.2px;border:1px solid transparent;cursor:help;white-space:nowrap;
+}
+.sig.buy {background:rgba(255,77,79,.16);color:var(--up);border-color:rgba(255,77,79,.42)}
+.sig.sell{background:rgba(30,199,125,.14);color:var(--dn);border-color:rgba(30,199,125,.4)}
+.sig.warn{background:rgba(240,162,76,.14);color:var(--warn);border-color:rgba(240,162,76,.42)}
+.spark{display:block}
+.na{color:var(--tx3);font-size:12px}
+
+/* detail */
+.dbox{padding:12px 16px 14px 40px;display:flex;gap:26px;flex-wrap:wrap;font-size:12px;color:var(--tx2)}
+.dbox .col{min-width:230px}
+.dbox h4{margin:0 0 6px;font-size:11px;color:var(--tx3);font-weight:600;letter-spacing:.6px}
+.dbox table{width:auto}
+.dbox td{font-size:12px;padding:2px 14px 2px 0;color:var(--tx2);border:0;text-align:right}
+.dbox td.k{color:var(--tx3);text-align:left;padding-right:10px}
+.seq{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;line-height:1.7;color:var(--tx2)}
+.seq span{display:inline-block;min-width:104px;color:var(--tx3)}
+
+.ft{margin-top:14px;font-size:11px;color:var(--tx3);line-height:1.9}
+.ft code{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:11px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:10px;font-size:11px;color:var(--tx3)}
+.legend i{font-style:normal;display:inline-flex;align-items:center;gap:5px}
+.legend .sw{width:11px;height:11px;border-radius:3px;display:inline-block;border:1px solid transparent}
+/* ── 历史弹窗 ── */
+.mask{position:fixed;inset:0;background:rgba(3,6,11,.74);display:flex;align-items:flex-start;justify-content:center;padding:22px 16px;z-index:60;overflow:auto;backdrop-filter:blur(2px)}
+.mask.hide{display:none}
+.mwin{background:var(--panel);border:1px solid var(--line2);border-radius:var(--radius);width:1280px;max-width:100%;box-shadow:0 20px 70px rgba(0,0,0,.55);margin:auto 0}
+.mhead{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.mhead h3{margin:0;font-size:15px;letter-spacing:.4px}
+.mhead h3 em{font-style:normal;color:var(--tx3);font-size:12px;font-weight:400;margin-left:8px}
+.mhead .sub{font-size:12px;color:var(--tx3);margin-left:2px}
+.mx{margin-left:auto;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:var(--radius-sm);padding:4px 12px;font-size:13px;cursor:pointer;font-family:inherit}
+.mx:hover{background:var(--panel-h);border-color:var(--line2)}
+.mbody{padding:12px 16px 18px}
+.hmini{background:var(--panel2);color:var(--accent-l);border:1px solid var(--line2);border-radius:var(--radius-sm);padding:2px 8px;font-size:11px;cursor:pointer;font-family:inherit;white-space:nowrap}
+.hmini:hover{background:var(--panel-h);color:var(--accent-l);border-color:var(--line2)}
+.mtab{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:12.5px}
+.mtab th,.mtab td{border:0;border-bottom:1px solid var(--line);padding:5px 8px;text-align:right;white-space:nowrap;background:transparent}
+.mtab th{color:var(--tx2);font-weight:600;font-size:11.5px;padding:6px 8px;border-bottom:1px solid var(--line2);text-align:right;letter-spacing:.3px}
+.mtab td.l,.mtab th.l{text-align:left}
+.mtab tr.grp td{background:var(--panel3);color:var(--tx3);font-size:11px;letter-spacing:.8px;text-align:left;padding:5px 8px;border-bottom:1px solid var(--line)}
+.mtab tr:hover td{background:var(--row-h)}
+.hnote{font-size:12px;color:var(--tx2);background:var(--panel2);border:1px solid var(--line);border-radius:var(--radius);padding:9px 12px;margin:12px 0 4px;line-height:1.9}
+.hnote b{color:var(--tx)}
+.hnote code{background:var(--panel2);border:1px solid var(--line2);border-radius:4px;padding:0 5px;font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace}
+.mrow-note{font-size:11.5px;color:var(--tx3);margin-top:6px;line-height:1.8}
+/* 信号级别高亮单元格 */
+td.hl1{color:var(--dn);font-weight:700}
+td.hl2{color:var(--warn);font-weight:700}
+td.hl3{color:var(--up);font-weight:700}
+/* 单股历史图 */
+.phd{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:2px 2px 8px;font-size:12.5px;color:var(--tx2)}
+.phd b{color:var(--tx);font-size:13.5px;letter-spacing:.3px}
+.phd .tag{font-size:10px;color:var(--tx3);background:var(--panel2);border:1px solid var(--line2);border-radius:3px;padding:1px 6px;white-space:nowrap}
+.phd .src{margin-left:auto;font-size:11px;color:var(--tx3);white-space:nowrap}
+.phd .src b{color:var(--tx2);font-size:11px;font-weight:600}
+.histbox{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:8px 10px 2px;margin-top:6px;overflow-x:auto}
+.histbox svg{display:block}
+.histcap{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--tx3);padding:6px 2px 2px}
+.histcap i{font-style:normal;display:inline-flex;align-items:center;gap:5px}
+@media(max-width:1500px){.cards{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:820px){.cards{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body data-page-node-id="hk04TJDAPXxCfbVZAHErIS">
+<div class="wrap" data-page-node-id="wDGANli2erUsdd7DU7BtBV">
+
+  <div class="hd" data-page-node-id="YC37sL4u7x0jgKJPTZcnIN">
+    <h1 data-page-node-id="vjm5qDVo4lCPlj9pGqKgZm">MACD-V 波动率标准化动量监控<span data-page-node-id="XqNnEdG50EQbB51PEEqLrZ">11 只标的 · 日线 / 周线双周期</span></h1>
+    <div class="formula" id="formula" data-page-node-id="NbkYQFD2gZpSrvEwrQmJud">MACD-V = (EMA12 − EMA26) ÷ ATR(26) × 100　·　ATR = MA(TR,26) 简单平均</div>
+    <div class="spacer" data-page-node-id="pNfVvWBjBz57WEXF4nBLZb"></div>
+    <div class="ctl" data-page-node-id="EWrQ6d8EvBVON80fcZLARN">
+      <div class="meta" data-page-node-id="x7k3iGYi3icEikrcQSNndB"><span class="dot" id="dot" data-page-node-id="zDweDeyMojh3pN2QChD9hh"></span><span id="status" data-page-node-id="uRJpqlbb0UDSqGUf3hp5hx">初始化…</span></div>
+      <div class="meta" data-page-node-id="BNOInjqotH8ePxUG9mUDBS">数据时间 <b id="asof" data-page-node-id="hYPpn5Y1CAA3B7zxAww9rr">—</b></div>
+      <button class="btn pri" id="refresh">刷新数据</button>
+    </div>
+  </div>
+
+  <div class="legend" data-page-node-id="RQgZXDazvol3doORFSEQG1">
+    <span data-page-node-id="V1gyVSSCg9CNCfMiD64vdg">阈值分档：</span>
+    <i data-page-node-id="eGgiN0RyIkP58G9gb7lGlx"><span class="sw" style="background:rgba(255,77,79,.20);border-color:rgba(255,77,79,.45)" data-page-node-id="8d8hmZBVYvYQAgkEIcIZmQ"></span>超买 &gt; +150</i>
+    <i data-page-node-id="OqBcrTCMgKMrfUCsFR4ZXs"><span class="sw" style="background:rgba(255,138,92,.13);border-color:rgba(255,138,92,.32)" data-page-node-id="1gJOiDTgnfaQAzq8fnEjFJ"></span>强势上涨 +50 ~ +150</i>
+    <i data-page-node-id="Rp3Ogih5UEGjT56LyHnGMs"><span class="sw" style="background:var(--panel2);border-color:var(--line2)" data-page-node-id="16KAksZgBPUvTBKdCRssdI"></span>震荡 −50 ~ +50</i>
+    <i data-page-node-id="AAIOBgqRCqEErwBXNuOSdV"><span class="sw" style="background:rgba(79,209,165,.13);border-color:rgba(79,209,165,.32)" data-page-node-id="CNVwWoKGBTJvL6SkfL6429"></span>强势下跌 −150 ~ −50</i>
+    <i data-page-node-id="G0YSDcvqdB1VYhbtFIHPzj"><span class="sw" style="background:rgba(30,199,125,.20);border-color:rgba(30,199,125,.45)" data-page-node-id="2EmLtTeu3aiPvAVIcmfm14"></span>超卖 &lt; −150</i>
+    <span style="color:var(--tx3)">│ 200EMA 状态：红=价在其上(牛) 绿=在其下(熊) · 走势图细点线 = ±100 趋势阶段极限</span>
+    <span style="margin-left:auto;display:inline-flex;gap:10px;align-items:center" data-page-node-id="AcxWS1DgC6Uvbd9wYQsN5E">
+      <span class="chk" data-page-node-id="Pl07NQB8c1sliz2wcK0JjI"><input type="checkbox" id="onlyalert" data-page-node-id="Ss7TTgAeWLDWmcteY4aVYC">只看非震荡（|值| ≥ 50）</span>
+      <span class="seg" id="atrseg">
+        <button data-a="ma" class="on">ATR：简单 MA（通达信）</button>
+        <button data-a="wilder">Wilder RMA</button>
+      </span>
+      <span class="seg" id="wkseg" data-page-node-id="Ojkdy0Y1SHHIpiT5hFowO5">
+        <button data-w="cur" class="on" data-page-node-id="SgQtJZceGFF5Mp2s1t0djg">周线：当前周</button>
+        <button data-w="done" data-page-node-id="s1t9JtkJeNkofrIvneC15Y">上一已完成周</button>
+      </span>
+    </span>
+  </div>
+
+  <div class="cards" id="cards"></div>
+  <div class="sigrow" id="sigrow"></div>
+  <div class="alerts none" id="alerts"><span class="t">阶段 / 信号变化</span><span id="alertBody">—</span></div>
+
+  <div class="tbwrap" data-page-node-id="mYGFEcxahKqOQwb6odZYxZ">
+    <table data-page-node-id="CqzYa5JH4AWyIVGfB5AyJf">
+      <thead>
+        <tr>
+          <th class="l" rowspan="2" style="width:26px"></th>
+          <th class="l srt" data-k="code" rowspan="2" style="width:62px">代码<span class="ar">▼</span></th>
+          <th class="l srt" data-k="name" rowspan="2" style="width:88px">名称<span class="ar">▼</span></th>
+          <th class="srt" data-k="price" rowspan="2" style="width:66px">现价<span class="ar">▼</span></th>
+          <th class="srt" data-k="pct" rowspan="2" style="width:70px">涨跌幅<span class="ar">▼</span></th>
+          <th class="grp wk" colspan="7">周 线 <em style="font-style:normal;font-size:9px;opacity:.7">主参考</em></th>
+          <th class="grp day" colspan="3">日 线</th>
+          <th class="l" rowspan="2" style="width:56px">5年</th>
+        </tr>
+        <tr>
+          <th class="srt wkx" data-k="week" style="width:96px">MACD-V<span class="ar">▼</span></th>
+          <th class="wkx" style="width:70px">信号线</th>
+          <th class="wkx" style="width:66px">柱</th>
+          <th class="wkx" style="width:104px">近 20 期</th>
+          <th class="l wkx" style="width:92px">阶段</th>
+          <th class="wkx" style="width:88px">EMA200</th>
+          <th class="wkx" style="width:108px">策略信号</th>
+          <th class="srt" data-k="day" style="width:96px">MACD-V<span class="ar">▼</span></th>
+          <th style="width:104px">近 20 期</th>
+          <th class="l" style="width:92px">阶段</th>
+        </tr>
+      </thead>
+      <tbody id="tb" data-page-node-id="FKgnsHrjpj28r4CxToeDsJ"></tbody>
+    </table>
+  </div>
+
+  <div class="ft" data-page-node-id="xk8XguvNFmSDGyBdHzbqoA">
+    <div data-page-node-id="LBLV5nlQnuIOJKj6gl6wTK">数据源：腾讯财经 <code data-page-node-id="LTFAY90ZmQCrTkp8Rch4W8">web.ifzq.gtimg.cn</code>（主，前复权）／东方财富 <code data-page-node-id="E6LpTOIFFfC5PnVlPrd2Gl">push2his.eastmoney.com</code>（备）。参数：EMA 12 / 26，ATR 26，信号线 EMA 9。ATR 口径可在右上角切换：「简单 MA」=<code>ATR:=MA(MTR,26)</code>（通达信/同花顺默认，本页默认口径）／「Wilder RMA」=<code>ATR=(ATR×25+TR)/26</code>（TradingView 与原论文标准）。两种口径绝对差值通常 2%~8%，阶段判定基本一致。</div>
+    <div data-page-node-id="MV5qKem1OjyOI4SF2oq2HB">MACD-V 由 Alex Spiroglou 提出（2022 CMT Charles H. Dow Award）。周线末根为<b data-page-node-id="A94QG7KbcRv4z8js1w7JPU">未完成周</b>，数值随本周行情变动，可在右上角切换为「上一已完成周」口径。前复权数据会随新的除权除息而回溯调整，历史快照不宜跨期纵向比较。</div>
+    <div data-page-node-id="VVEc6ySyPSMnLwrYiAPp49">本页仅为技术指标的客观展示与监控，不构成任何投资建议。</div>
+  </div>
+</div>
+
+<!-- 历史弹窗容器 -->
+<div class="mask hide" id="mask"><div class="mwin" id="mwin"></div></div>
+
+<script>
+/* 主题取色：从 theme.css 的 :root 读变量，保证与全站配色一致 */
+const QC=(n)=>getComputedStyle(document.documentElement).getPropertyValue('--'+n).trim();
+
+/* ═══════════════ 标的表 ═══════════════ */
+const STOCKS = [
+  {code:'601166', name:'兴业银行'},
+  {code:'000333', name:'美的集团'},
+  {code:'600887', name:'伊利股份'},
+  {code:'600900', name:'长江电力'},
+  {code:'600941', name:'中国移动'},
+  {code:'002807', name:'江阴银行'},
+  {code:'601117', name:'中国化学'},
+  {code:'002293', name:'罗莱生活'},
+  {code:'600036', name:'招商银行'},
+  {code:'000001', name:'平安银行'},
+  {code:'600989', name:'宝丰能源'},
+];
+const N_FAST=12, N_SLOW=26, N_ATR=26, N_SIG=9, MIN_BARS=50;
+const LMT_DAY=320, LMT_WEEK=400;   // 周线取 400 根(~7.7年)：前 140 根供 EMA26/EMA200 预热，展示窗口=尾部 260 周(近5年)
+
+/* ═══════════════ 计算内核 ═══════════════ */
+function ema(arr,n){
+  if(!arr.length) return [];
+  const k=2/(n+1); const out=new Array(arr.length);
+  let e=arr[0]; out[0]=e;
+  for(let i=1;i<arr.length;i++){ e=arr[i]*k+e*(1-k); out[i]=e; }
+  return out;
+}
+/** 长周期 EMA（如 EMA200）：以前 n 根 SMA 作种子，避免 close[0] 作种子时预热不足 */
+function emaSmaSeed(arr,n){
+  const L=arr.length; if(!L) return [];
+  const out=new Array(L).fill(null);
+  const seedN=Math.min(n,L);
+  let s=0; for(let i=0;i<seedN;i++) s+=arr[i];
+  let e=s/seedN;
+  if(seedN<n){ out[L-1]=e; return out; }        // 样本不足 n：退化为全样本均值
+  out[n-1]=e;
+  const k=2/(n+1);
+  for(let i=n;i<L;i++){ e=arr[i]*k+e*(1-k); out[i]=e; }
+  return out;
+}
+/** Wilder ATR：out[j] 对应 K 线下标 n+j */
+function atrWilder(bars,n){
+  const tr=[];
+  for(let i=1;i<bars.length;i++){
+    const h=bars[i].h, l=bars[i].l, pc=bars[i-1].c;
+    tr.push(Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc)));
+  }
+  if(tr.length<n) return null;
+  let a=0; for(let i=0;i<n;i++) a+=tr[i]; a/=n;
+  const out=[a];
+  for(let i=n;i<tr.length;i++){ a=(a*(n-1)+tr[i])/n; out.push(a); }
+  return out;
+}
+/** 通达信口径 ATR：ATR = MA(MTR, N) 简单平均；out[j] 对应 K 线下标 n+j */
+function atrMA(bars,n){
+  const tr=[];
+  for(let i=1;i<bars.length;i++){
+    const h=bars[i].h, l=bars[i].l, pc=bars[i-1].c;
+    tr.push(Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc)));
+  }
+  if(tr.length<n) return null;
+  const out=[]; let s=0;
+  for(let i=0;i<tr.length;i++){
+    s+=tr[i];
+    if(i>=n) s-=tr[i-n];
+    if(i>=n-1) out.push(s/n);
+  }
+  return out;
+}
+/** 返回 {bars, mv[], sig[], hist[], startBar} —— mv[j] 对应 K 线下标 startBar+j */
+function macdv(bars,mode){
+  const N=bars.length;
+  if(N<MIN_BARS) return null;
+  const close=bars.map(b=>b.c);
+  const e12=ema(close,N_FAST), e26=ema(close,N_SLOW);
+  const atr=(mode==='wilder'?atrWilder:atrMA)(bars,N_ATR);
+  if(!atr) return null;
+  const start=N_ATR;                       // ATR 首个有效值所在 K 线下标
+  const mv=new Array(N-start), dates=new Array(N-start);
+  for(let j=0;j<mv.length;j++){
+    const i=start+j, a=atr[i-start];
+    if(!(a>0)) return null;                // ATR 为 0（一字板/停牌）→ 整条序列作废
+    mv[j]=(e12[i]-e26[i])/a*100;
+    dates[j]=bars[i].d;
+  }
+  const sig=ema(mv,N_SIG);
+  const hist=mv.map((v,j)=>v-sig[j]);
+  const e200=emaSmaSeed(close,200);
+  return {bars,mv,sig,hist,dates,start,e12,e26,atr,e200,mode:mode||'ma'};
+}
+/** 取指定 K 线下标处的完整读数 */
+function at(series, barIdx){
+  const j=barIdx-series.start;
+  if(!series || j<0 || j>=series.mv.length) return null;
+  const ema200=series.e200[barIdx];
+  const close=series.bars[barIdx].c;
+  return {
+    mv:series.mv[j], sig:series.sig[j], hist:series.hist[j],
+    date:series.dates[j], close,
+    ema12:series.e12[barIdx], ema26:series.e26[barIdx], atr:series.atr[barIdx-N_ATR],
+    ema200: ema200==null?null:ema200,
+    ema200Dist: ema200==null||!(ema200>0)?null:(close/ema200-1)*100
+  };
+}
+function stageOf(v){
+  if(v==null||!isFinite(v)) return {k:'na',t:'—'};
+  if(v>150)  return {k:'ob', t:'超买'};
+  if(v>50)   return {k:'up', t:'强势上涨'};
+  if(v>=-50) return {k:'mid',t:'震荡'};
+  if(v>=-150)return {k:'dn', t:'强势下跌'};
+  return {k:'os', t:'超卖'};
+}
+/* 用法1·趋势过滤区间规则信号：EMA200 定牛熊 + MACD-V 区间（论文 4.4.2） */
+const SIG_LABEL={none:'无信号',buy:'低吸候选',sell:'反弹减仓',ob:'超买·勿追',os:'超卖·勿杀',deep:'破位警示',over:'反弹过强'};
+const SIG_CLS={buy:'buy',sell:'sell',ob:'warn',os:'warn',deep:'warn',over:'warn'};
+function sigOf(r){
+  if(!r || r.mv==null || !isFinite(r.mv)) return null;
+  const v=r.mv;
+  if(r.ema200Dist==null){                       // 无 200EMA（样本不足）→ 只报极端风险
+    if(v>150)  return {key:'ob',   label:SIG_LABEL.ob};
+    if(v<-150) return {key:'os',   label:SIG_LABEL.os};
+    return null;
+  }
+  if(r.ema200Dist>=0){                          // 牛市（价>EMA200）
+    if(v>150)        return {key:'ob',  label:SIG_LABEL.ob};     // 过热，勿追
+    if(v<-100)       return {key:'deep',label:SIG_LABEL.deep};   // 深度回撤，破-100警示
+    if(v>=-100&&v<-50) return {key:'buy', label:SIG_LABEL.buy};  // 回撤低吸候选区
+    return null;
+  }
+  // 熊市（价<EMA200）
+  if(v<-150)         return {key:'os',  label:SIG_LABEL.os};     // 衰竭，勿杀
+  if(v>100)          return {key:'over',label:SIG_LABEL.over};   // 反弹过强警示
+  if(v<=100&&v>50)   return {key:'sell',label:SIG_LABEL.sell};   // 反弹减仓候选区
+  return null;
+}
+function sigCell(r){
+  const g=sigOf(r);
+  if(!g) return '<span class="na">—</span>';
+  return `<span class="sig ${SIG_CLS[g.key]}" title="${g.label}（论文 4.4.2 区间规则提示，非买卖建议）">${g.label}</span>`;
+}
+function bandOf(v){ return v==null?null:stageOf(v).k; }
+
+/* ═══════════════ 取数（JSONP） ═══════════════ */
+let seq=0;
+function mkt(code){
+  if(/^(8|4)/.test(code)) return 'bj';
+  if(/^6/.test(code))     return 'sh';
+  if(/^(0|3)/.test(code)) return 'sz';
+  return 'sh';
+}
+function jsonpVar(url,varName,timeout=11000){
+  return new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    let done=false;
+    const clean=()=>{ clearTimeout(t); s.onload=s.onerror=null; if(s.parentNode) s.remove(); };
+    const t=setTimeout(()=>{ if(done)return; done=true; clean(); try{delete window[varName]}catch(e){} rej(new Error('timeout')); },timeout);
+    s.onload=()=>{ if(done)return; done=true; clean();
+      const v=window[varName]; try{delete window[varName]}catch(e){}
+      (v&&v.data)?res(v):rej(new Error('empty'));
+    };
+    s.onerror=()=>{ if(done)return; done=true; clean(); try{delete window[varName]}catch(e){} rej(new Error('neterr')); };
+    s.src=url; document.head.appendChild(s);
+  });
+}
+function jsonpCb(url,cbName,timeout=11000){
+  return new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    let done=false;
+    const clean=()=>{ clearTimeout(t); s.onload=s.onerror=null; if(s.parentNode) s.remove(); try{delete window[cbName]}catch(e){} };
+    const t=setTimeout(()=>{ if(done)return; done=true; clean(); rej(new Error('timeout')); },timeout);
+    window[cbName]=j=>{ if(done)return; done=true; clean(); (j&&j.data)?res(j):rej(new Error('empty')); };
+    s.onerror=()=>{ if(done)return; done=true; clean(); rej(new Error('neterr')); };
+    s.src=url; document.head.appendChild(s);
+  });
+}
+/** 腾讯 */
+async function fromTx(code,period){
+  const sym=mkt(code)+code, id='__mv'+(++seq)+'_'+period;
+  const url='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+sym+','+period+',,,'+
+            (period==='day'?LMT_DAY:LMT_WEEK)+',qfq&_var='+id;
+  const j=await jsonpVar(url,id);
+  const d=j.data[sym]; if(!d) throw new Error('nodata');
+  const arr=d['qfq'+period]||d[period]; if(!arr||!arr.length) throw new Error('nokline');
+  const bars=arr.map(r=>({d:r[0],o:+r[1],c:+r[2],h:+r[3],l:+r[4]}));
+  let quote=null;
+  if(d.qt&&d.qt[sym]){ const q=d.qt[sym]; quote={price:+q[3], chg:+q[31], pct:+q[32], time:q[30]}; }
+  return {bars,quote};
+}
+/** 东财（备源，函数式回调） */
+async function fromEm(code,period){
+  const id='emcb'+(++seq)+'_'+period;
+  const url='https://push2his.eastmoney.com/api/qt/stock/kline/get?secid='+(mkt(code)==='sh'?'1.':'0.')+code+
+            '&ut=fa5fd1943c7b386f172d6893dbfba10b&fields1=f1,f2,f3&fields2=f51,f52,f53,f54,f55,f56'+
+            '&klt='+(period==='day'?101:102)+'&fqt=1&end=20500101&lmt='+(period==='day'?LMT_DAY:LMT_WEEK)+'&cb='+id;
+  const j=await jsonpCb(url,id);
+  const ks=j.data.klines; if(!ks||!ks.length) throw new Error('nokline');
+  const bars=ks.map(s=>{const p=s.split(',');return {d:p[0],o:+p[1],c:+p[2],h:+p[3],l:+p[4]};});
+  return {bars,quote:null};
+}
+async function loadKline(code,period){
+  try{ const r=await fromTx(code,period); r.src='tx'; return r; }
+  catch(e1){
+    try{ const r=await fromEm(code,period); r.src='em'; return r; }
+    catch(e2){ return {error:e1.message+'/'+e2.message}; }
+  }
+}
+async function pool(items,limit,worker){
+  const out=new Array(items.length); let i=0;
+  const runners=Array.from({length:Math.min(limit,items.length)},async()=>{
+    while(i<items.length){ const k=i++; out[k]=await worker(items[k],k); }
+  });
+  await Promise.all(runners); return out;
+}
+
+/* ═══════════════ 状态 ═══════════════ */
+const store={};                 // code -> {code,name,price,pct,time,day,week,errDay,errWeek,src}
+let weekMode='cur';             // cur | done
+let atrMode='ma';               // ma(通达信 MA(TR,26)) | wilder(Wilder RMA)
+let sortKey='week', sortDir=-1;      // 周线为主参考：默认按周线 MACD-V 排序
+let loading=false;
+const expanded=new Set();
+
+function setStatus(kind,txt){
+  const d=document.getElementById('dot');
+  d.className='dot'+(kind?' '+kind:'');
+  document.getElementById('status').textContent=txt;
+}
+
+async function loadAll(){
+  if(loading) return;
+  loading=true;
+  document.getElementById('refresh').disabled=true;
+  setStatus('warn','正在取数…');
+  const jobs=[];
+  STOCKS.forEach(s=>{ jobs.push({s,p:'day'}); jobs.push({s,p:'week'}); });
+  let ok=0, fail=0, srcTx=0, srcEm=0;
+
+  await pool(jobs,4,async job=>{
+    const {s,p}=job;
+    const rec=store[s.code]||(store[s.code]={code:s.code,name:s.name});
+    const r=await loadKline(s.code,p);
+    if(r.error){ rec['err_'+p]=r.error; rec[p]=null; fail++; return; }
+    if(r.src==='tx') srcTx++; else srcEm++;
+    ok++;
+    rec[p]=macdv(r.bars,atrMode);
+    rec['bars_'+p]=r.bars;
+    if(r.quote){ rec.price=r.quote.price; rec.chg=r.quote.chg; rec.pct=r.quote.pct; rec.time=r.quote.time; }
+    if(!rec.price&&r.bars.length){
+      const b=r.bars, c=b[b.length-1].c, pc=b[b.length-2]?b[b.length-2].c:c;
+      rec.price=c; rec.pct=pc?(c-pc)/pc*100:0; rec.chg=c-pc;
+    }
+  });
+
+  loading=false;
+  document.getElementById('refresh').disabled=false;
+  if(fail===0){ setStatus('ok','正常 · '+srcTx+' 腾讯 / '+srcEm+' 东财'); }
+  else if(ok>0){ setStatus('warn','部分失败（'+fail+' 项）'); }
+  else { setStatus('err','取数失败'); }
+  // 数据时间
+  let t='';
+  for(const c in store){ if(store[c].time&&store[c].time>t) t=store[c].time; }
+  document.getElementById('asof').textContent = t
+    ? t.slice(0,4)+'-'+t.slice(4,6)+'-'+t.slice(6,8)+' '+t.slice(8,10)+':'+t.slice(10,12)
+    : '—';
+  render();
+}
+
+/* ═══════════════ 渲染 ═══════════════ */
+const fmt=(v,d=2)=>v==null||!isFinite(v)?'—':(v>=0?'+':'')+v.toFixed(d);
+const cls=v=>v>0?'up':(v<0?'dn':'flat');
+
+function sparkline(series,barIdx){
+  if(!series) return '<span class="na">—</span>';
+  const j=barIdx-series.start;
+  if(j<1) return '<span class="na">—</span>';
+  const from=Math.max(0,j-19), vals=series.mv.slice(from,j+1);
+  if(vals.length<2) return '<span class="na">—</span>';
+  const W=92,H=26,mid=H/2;
+  let mx=160; for(const v of vals) mx=Math.max(mx,Math.abs(v)*1.12);
+  const X=i=>i*(W-4)/((vals.length-1)||1)+2;
+  const Y=v=>mid-(v/mx)*(mid-3);
+  const pts=vals.map((v,i)=>X(i).toFixed(1)+','+Y(v).toFixed(1)).join(' ');
+  const last=vals[vals.length-1], st=stageOf(last);
+  const col = last>0?QC('up'):QC('dn');
+  const ref=v=>{
+    if(Math.abs(v)>mx) return '';
+    return `<line x1="0" y1="${Y(v).toFixed(1)}" x2="${W}" y2="${Y(v).toFixed(1)}" stroke="${v>0?QC('up'):QC('dn')}" stroke-opacity=".28" stroke-width="1" stroke-dasharray="2 3"/>`;
+  };
+  const ref100=v=>{
+    if(Math.abs(v)>mx) return '';
+    return `<line x1="0" y1="${Y(v).toFixed(1)}" x2="${W}" y2="${Y(v).toFixed(1)}" stroke="${v>0?QC('warn'):QC('dn')}" stroke-opacity=".30" stroke-width="1" stroke-dasharray="1 2"/>`;
+  };
+  return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    ${ref(150)}${ref(-150)}
+    ${ref100(100)}${ref100(-100)}
+    ${ref(50)}${ref(-50)}
+    <line x1="0" y1="${mid}" x2="${W}" y2="${mid}" stroke="${QC('line2')}" stroke-width="1"/>
+    <polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.4" stroke-linejoin="round"/>
+    <circle cx="${X(vals.length-1).toFixed(1)}" cy="${Y(last).toFixed(1)}" r="2" fill="${col}"/>
+  </svg>`;
+}
+
+/** 目标 K 线下标：日线=末根；周线按口径 */
+function targetIdx(rec,period){
+  const s=rec[period]; if(!s) return -1;
+  const last=s.bars.length-1;
+  if(period==='week'&&weekMode==='done'){
+    // 若末根仍是未完成周，则退一根
+    return (last>0 && isUnfinishedWeek(s.bars[last].d)) ? last-1 : last;
+  }
+  return last;
+}
+function isUnfinishedWeek(dstr){
+  const d=new Date(dstr+'T00:00:00'); if(isNaN(d)) return false;
+  const wd=(d.getDay()+6)%7;                 // 周一=0
+  const end=new Date(d); end.setDate(d.getDate()+(6-wd)); end.setHours(23,59,59,999);
+  return Date.now()<=end.getTime();
+}
+
+function mvCell(r){
+  if(!r) return '<span class="na">—</span>';
+  const st=stageOf(r.mv);
+  const band = st.k==='ob'?'ob':st.k==='os'?'os':st.k==='up'?'upz':st.k==='dn'?'dnz':'';
+  return `<span class="mv ${band}"><span class="v ${cls(r.mv)}">${fmt(r.mv)}</span><span class="s">${r.date}</span></span>`;
+}
+function stageCell(r){
+  if(!r) return '<span class="badge na">—</span>';
+  const st=stageOf(r.mv);
+  return `<span class="badge ${st.k}">${st.t}</span>`;
+}
+/** 200EMA 趋势状态：价在 EMA200 上方=牛市(红 上 x.x%)，下方=熊市(绿 下 x.x%) */
+function trendCell(r){
+  if(!r || r.ema200==null || r.ema200Dist==null) return '<span class="na">—</span>';
+  const pos=r.ema200Dist>=0, d=Math.abs(r.ema200Dist);
+  return `<span class="tchip ${pos?'up':'dn'}" title="收盘 ${r.close.toFixed(2)} vs EMA200 ${r.ema200.toFixed(3)}">${pos?'上':'下'} ${d.toFixed(1)}%</span>`;
+}
+
+function rowData(){
+  return STOCKS.map(s=>{
+    const rec=store[s.code]||{code:s.code,name:s.name};
+    const di=targetIdx(rec,'day'),  wi=targetIdx(rec,'week');
+    const d=di>=0?at(rec.day,di):null, w=wi>=0?at(rec.week,wi):null;
+    return {rec, d, w, di, wi};
+  });
+}
+
+function render(){
+  const rows=rowData();
+
+  /* ── 汇总卡 ── */
+  const order=[['ob','超买','&gt; +150'],['up','强势上涨','+50 ~ +150'],['mid','震荡','−50 ~ +50'],
+               ['dn','强势下跌','−150 ~ −50'],['os','超卖','&lt; −150']];
+  const cnt={}; order.forEach(o=>cnt[o[0]]={day:0,week:0});
+  rows.forEach(r=>{ if(r.d) cnt[stageOf(r.d.mv).k].day++; if(r.w) cnt[stageOf(r.w.mv).k].week++; });
+  document.getElementById('cards').innerHTML=order.map(o=>`
+    <div class="card c-${o[0]}">
+      <div class="lb"><span>${o[1]}</span><i>${o[2]}</i></div>
+      <div class="nums">
+        <div>日线<b>${cnt[o[0]].day}</b></div>
+        <div>周线<b>${cnt[o[0]].week}</b></div>
+      </div>
+    </div>`).join('');
+
+  /* ── 周线信号速览（主参考） ── */
+  const SIG_ROW=[['buy','低吸候选',QC('up')],['sell','反弹减仓',QC('dn')],['deep','破位警示',QC('warn')],
+                 ['over','反弹过强',QC('warn')],['ob','超买·勿追',QC('warn')],['os','超卖·勿杀',QC('warn')]];
+  const wc={}; SIG_ROW.forEach(s=>wc[s[0]]=0); let wNone=0;
+  rows.forEach(r=>{ const g=r.w?sigOf(r.w):null; if(g) wc[g.key]=(wc[g.key]||0)+1; else if(r.w) wNone++; });
+  const wActive=SIG_ROW.reduce((a,s)=>a+wc[s[0]],0);
+  const wValid=rows.filter(r=>r.w).length;
+  document.getElementById('sigrow').innerHTML =
+    `<span class="t">周线信号（主参考）</span>`+
+    SIG_ROW.filter(s=>wc[s[0]]>0).map(s=>`<span class="cnt act" title="${s[1]}：周线 MACD-V 处于对应操作区间"><b style="color:${s[2]}">${wc[s[0]]}</b>${s[1]}</span>`).join('')+
+    (wActive?`<span class="cnt"><b style="color:var(--tx3)">${wNone}</b><span class="tick">中性区</span></span>`
+            :`<span class="none-msg">当前无策略信号（${wValid} 只均处周线中性区）</span>`);
+
+  /* ── 阶段 / 信号变化 ── */
+  const {st,sg}=collectChanges(rows);
+  const el=document.getElementById('alerts');
+  if(st.length||sg.length){
+    el.className='alerts';
+    const items=[
+      ...st.map(c=>`<span class="ch"><b>${c.name}</b><em>${c.p==='day'?'日线':'周线'}·阶段</em><span class="badge ${c.fromK}">${c.from}</span> → <span class="badge ${c.toK}">${c.to}</span></span>`),
+      ...sg.map(c=>`<span class="ch"><b>${c.name}</b><em>${c.p==='day'?'日线':'周线'}·信号</em>${SIG_LABEL[c.from]===SIG_LABEL.none?'<span class="na">无信号</span>':'<span class="sig '+(SIG_CLS[c.from]||'warn')+'">'+SIG_LABEL[c.from]+'</span>'} → <span class="sig ${SIG_CLS[c.to]||'warn'}">${SIG_LABEL[c.to]}</span></span>`)
+    ];
+    document.getElementById('alertBody').innerHTML=items.join('');
+  }else{
+    el.className='alerts none';
+    document.getElementById('alertBody').textContent='本次刷新无阶段 / 信号变化';
+  }
+
+  /* ── 表格 ── */
+  const onlyAlert=document.getElementById('onlyalert').checked;
+  let list=rows.slice();
+  if(onlyAlert) list=list.filter(r=>(r.d&&Math.abs(r.d.mv)>=50)||(r.w&&Math.abs(r.w.mv)>=50));
+  const val=r=>{
+    switch(sortKey){
+      case 'day':  return r.d?r.d.mv:null;
+      case 'week': return r.w?r.w.mv:null;
+      case 'price':return r.rec.price??null;
+      case 'pct':  return r.rec.pct??null;
+      case 'code': return r.rec.code;
+      case 'name': return r.rec.name;
+    }
+  };
+  list.sort((a,b)=>{
+    const x=val(a), y=val(b);
+    if(x==null&&y==null) return 0;
+    if(x==null) return 1; if(y==null) return -1;
+    if(typeof x==='string') return x.localeCompare(y)*sortDir;
+    return (x-y)*sortDir;
+  });
+
+  document.getElementById('tb').innerHTML = list.length? list.map(r=>{
+    const {rec,d,w}=r;
+    const open=expanded.has(rec.code);
+    const err=rec.err_day||rec.err_week;
+    const wkTag=(weekMode==='cur'&&w&&isUnfinishedWeek(w.date))?'<span class="tagd">未收盘</span>':'';
+    return `
+    <tr class="${open?'expanded':''}" data-code="${rec.code}">
+      <td class="l"><span class="exp ${open?'open':''}" data-exp="${rec.code}">▶</span></td>
+      <td class="l c-code">${rec.code}</td>
+      <td class="l c-name">${rec.name}</td>
+      <td class="c-price">${rec.price!=null?rec.price.toFixed(2):'<span class="na">—</span>'}</td>
+      <td class="c-pct ${cls(rec.pct)}">${rec.pct!=null?fmt(rec.pct)+'%':'—'}</td>
+      <td>${mvCell(w)}${wkTag?`<div style="margin-top:2px">${wkTag}</div>`:''}</td>
+      <td class="sub">${w?fmt(w.sig):'—'}</td>
+      <td class="sub ${w?cls(w.hist):''}">${w?fmt(w.hist):'—'}</td>
+      <td>${sparkline(rec.week, r.wi)}</td>
+      <td class="l">${stageCell(w)}${err&&!w?'<span class="na">取数失败</span>':''}</td>
+      <td class="l">${trendCell(w)}</td>
+      <td class="l">${sigCell(w)}</td>
+      <td>${mvCell(d)}</td>
+      <td>${sparkline(rec.day, r.di)}</td>
+      <td class="l">${stageCell(d)}${err&&!d?'<span class="na">取数失败</span>':''}</td>
+      <td class="l"><button class="hmini" data-hist="${rec.code}" title="近 5 年周线 DIF 走势与阈值触发明细">历史</button></td>
+    </tr>
+    <tr class="det ${open?'':'det-hidden'}" data-det="${rec.code}"><td colspan="16">${detailHtml(rec,r.d,r.w)}</td></tr>`;
+  }).join('') : `<tr><td colspan="16" style="text-align:center;padding:26px;color:var(--tx3)">当前筛选条件下无标的</td></tr>`;
+
+  // 排序头状态
+  document.querySelectorAll('th.srt').forEach(th=>{
+    const on=th.dataset.k===sortKey;
+    th.classList.toggle('act',on);
+    th.querySelector('.ar') && (th.querySelector('.ar').textContent = on?(sortDir<0?'▼':'▲'):'▼');
+  });
+}
+
+function detailHtml(rec,d,w){
+  const blk=(t,r,src)=>{
+    if(!r) return `<div class="col"><h4>${t}</h4><div class="seq">数据不足或取数失败</div></div>`;
+    const s=src, j=s.bars.length-1-s.start;
+    const seq=s.mv.slice(Math.max(0,j-4),j+1);
+    const dts=s.dates.slice(Math.max(0,j-4),j+1);
+    return `<div class="col"><h4>${t}</h4><table>
+      <tr><td class="k">数据日期</td><td>${r.date}</td></tr>
+      <tr><td class="k">收盘价</td><td>${r.close.toFixed(2)}</td></tr>
+      <tr><td class="k">EMA ${N_FAST}</td><td>${r.ema12.toFixed(3)}</td></tr>
+      <tr><td class="k">EMA ${N_SLOW}</td><td>${r.ema26.toFixed(3)}</td></tr>
+      <tr><td class="k">ATR ${N_ATR}${s.mode==='wilder'?' (Wilder RMA)':' (MA 简单平均)'}</td><td>${r.atr.toFixed(4)}</td></tr>
+      <tr><td class="k">EMA12−EMA26</td><td>${(r.ema12-r.ema26).toFixed(4)}</td></tr>
+      <tr><td class="k">EMA200</td><td>${r.ema200==null?'—':r.ema200.toFixed(3)}${r.ema200Dist!=null?`　(${r.ema200Dist>=0?'上':'下'} ${Math.abs(r.ema200Dist).toFixed(2)}%)`:''}</td></tr>
+      <tr><td class="k">MACD-V</td><td style="color:var(--tx);font-weight:600">${fmt(r.mv)}</td></tr>
+      <tr><td class="k">信号线 EMA${N_SIG}</td><td>${fmt(r.sig)}</td></tr>
+      <tr><td class="k">柱</td><td>${fmt(r.hist)}</td></tr>
+      <tr><td class="k">策略信号</td><td>${(function(){const g=sigOf(r);return g?`<span class="sig ${SIG_CLS[g.key]}">${g.label}</span>`:'<span class="na">无信号</span>';})()}</td></tr>
+    </table>
+    <div class="seq" style="margin-top:6px">${seq.map((v,i)=>`<div><span>${dts[i]}</span>${fmt(v)}</div>`).join('')}</div>
+    </div>`;
+  };
+  return `<div class="dbox">
+    ${blk('日线计算明细', d, rec.day)}
+    ${blk('周线计算明细', w, rec.week)}
+    <div class="col"><h4>样本</h4><table>
+      <tr><td class="k">日线根数</td><td>${rec.bars_day?rec.bars_day.length:0}</td></tr>
+      <tr><td class="k">周线根数</td><td>${rec.bars_week?rec.bars_week.length:0}</td></tr>
+      <tr><td class="k">ATR 口径</td><td>${atrMode==='ma'?'MA(TR,26) 简单平均':'Wilder RMA(26)'}</td></tr>
+      <tr><td class="k">复权</td><td>前复权</td></tr>
+    </table></div>
+  </div>`;
+}
+
+/* ── 阶段 / 策略信号变化检测（localStorage 持久化） ── */
+const LS_STAGE='macdv_stage_v1', LS_SIG='macdv_sig_v1';
+function collectChanges(rows){
+  let pSt={},pSg={};
+  try{ pSt=JSON.parse(localStorage.getItem(LS_STAGE)||'{}'); }catch(e){}
+  try{ pSg=JSON.parse(localStorage.getItem(LS_SIG)||'{}'); }catch(e){}
+  const st=[], sg=[], nSt={}, nSg={};
+  rows.forEach(r=>{
+    [['day',r.d],['week',r.w]].forEach(([p,rd])=>{
+      if(!rd) return;
+      const key=r.rec.code+'_'+p;
+      const stk=stageOf(rd.mv).k; nSt[key]=stk;
+      if(pSt[key] && pSt[key]!==stk && stk!=='na')
+        st.push({name:r.rec.name,p,fromK:pSt[key],from:stageOf(bandVal(pSt[key])).t,toK:stk,to:stageOf(rd.mv).t});
+      const g=sigOf(rd); const gk=g?g.key:'none'; nSg[key]=gk;
+      if(pSg[key]!=null && pSg[key]!==gk)
+        sg.push({name:r.rec.name,p,from:pSg[key],to:gk});
+    });
+  });
+  try{ localStorage.setItem(LS_STAGE,JSON.stringify(nSt)); }catch(e){}
+  try{ localStorage.setItem(LS_SIG,JSON.stringify(nSg)); }catch(e){}
+  return {st,sg};
+}
+function bandVal(k){ return k==='ob'?160:k==='up'?100:k==='mid'?0:k==='dn'?-100:-160; }
+
+/* ═══════════════ 历史轮次（近5年周线 DIF 阈值） ═══════════════ */
+const HWIN=260;   // 展示/统计窗口：尾部 260 周 ≈ 近 5 年
+const fmtD=d=>d&&d.length===8?d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8):d;
+const WK=d=>d&&d.length===8?d.slice(0,4)+'-'+d.slice(4,6):d;
+
+/** 扫描单股周线超跌(-50/-100/-150)与高位(+100/+150)事件。
+ *  超跌事件：连续 mv<−50 段；段内再标 破−100/破−150 时点。高位事件：连续 mv>100 段；段内标 破+150。 */
+function scanHist(rec){
+  const s=rec.week; if(!s||!s.mv||!s.mv.length) return null;
+  const n=s.mv.length, w0=Math.max(0,n-HWIN);
+  const evL=[], evH=[];
+  const finL=(ids)=>{
+    let min=Infinity,mi=ids[0],hit100=null,hit150=null;
+    for(const j of ids){ const v=s.mv[j];
+      if(v<min){min=v;mi=j;}
+      if(hit100==null&&v<-100) hit100=j;
+      if(hit150==null&&v<-150) hit150=j;
+    }
+    return {a:ids[0],b:ids[ids.length-1],weeks:ids.length,min,mi,hit100,hit150};
+  };
+  const finH=(ids)=>{
+    let max=-Infinity,mi=ids[0],hit150=null;
+    for(const j of ids){ const v=s.mv[j];
+      if(v>max){max=v;mi=j;}
+      if(hit150==null&&v>150) hit150=j;
+    }
+    return {a:ids[0],b:ids[ids.length-1],weeks:ids.length,max,mi,hit150};
+  };
+  let curL=null, curH=null;
+  for(let j=w0;j<n;j++){
+    const v=s.mv[j];
+    if(v<-50){ if(!curL) curL=[]; curL.push(j); }
+    else if(curL){ evL.push(finL(curL)); curL=null; }
+    if(v>100){ if(!curH) curH=[]; curH.push(j); }
+    else if(curH){ evH.push(finH(curH)); curH=null; }
+  }
+  if(curL) evL.push(finL(curL));
+  if(curH) evH.push(finH(curH));
+  return {s,w0,evL,evH};
+}
+
+/** 单股 SVG：近5年周线 DIF/DEA + 阈值参考线 + 事件区段着色 + 时点标记 */
+function histSvg(rec,h){
+  const s=h.s, n=s.mv.length, w0=h.w0, W=n-w0;
+  const Wd=1180, T=26, B=256, half=(B-T)/2, mid=(T+B)/2;
+  const padL=8, padR=52;
+  const step=(Wd-padL-padR)/(Math.max(1,W-1));
+  const X=j=>padL+(j-w0)*step;
+  let mA=150; for(let j=w0;j<n;j++) mA=Math.max(mA,Math.abs(s.mv[j]));
+  mA*=1.1;
+  const Y=v=>mid-(v/mA)*half;
+  const x=(a,b)=>`x="${(X(a)-step*0.5).toFixed(1)}" width="${(X(b)-X(a)+step*0.6).toFixed(1)}"`;
+  const refs=[[150,2,QC('up')],[100,1,QC('warn')],[-50,0,QC('dn')],[-100,1,QC('dn')],[-150,2,QC('dn')]];
+  const segHtml=(evs,base,deep,deeper)=>{
+    let o='';
+    evs.forEach(e=>{
+      o+=`<rect ${x(e.a,e.b)} y="${T}" height="${(B-T)}" fill="${base}"/>`;
+      if(e.hit100!=null&&deeper) o+=`<rect ${x(e.hit100,e.b)} y="${T}" height="${(B-T)}" fill="${deep}"/>`;
+      if(e.hit150!=null) o+=`<rect ${x(e.hit150,e.b)} y="${T}" height="${(B-T)}" fill="${deeper}"/>`;
+    });
+    return o;
+  };
+  const ptsD=[],ptsS=[],pnts=[];
+  for(let j=w0;j<n;j++){
+    ptsD.push(X(j).toFixed(1)+','+Y(s.mv[j]).toFixed(1));
+    ptsS.push(X(j).toFixed(1)+','+Y(s.sig[j]).toFixed(1));
+  }
+  let tick='',grid='';
+  for(let k=0;k<6;k++){
+    const j=w0+k*52; if(j>=n) break;
+    tick+=`<text x="${X(j).toFixed(1)}" y="${B+15}" text-anchor="middle" font-size="9" fill="${QC('tx3')}">${WK(s.dates[j])}</text>`;
+    grid+=`<line x1="${X(j).toFixed(1)}" y1="${T}" x2="${X(j).toFixed(1)}" y2="${B}" stroke="${QC('line')}" stroke-width="1"/>`;
+  }
+  const refsHtml=refs.map(r=>{
+    const v=r[0],dash=r[1],c=r[2];
+    if(Math.abs(v)>mA) return '';
+    return `<line x1="${padL}" y1="${Y(v).toFixed(1)}" x2="${Wd-padR}" y2="${Y(v).toFixed(1)}" stroke="${c}" stroke-opacity="${v>0?.5:.45}" stroke-width="${v===-50||v===50?0.8:1.1}" stroke-dasharray="${v>0?'6 4':'4 5'}"/>
+    <text x="${Wd-padR+4}" y="${(Y(v)-1).toFixed(1)}" font-size="8.5" fill="${c}" fill-opacity=".75">${v>0?'+':''}${v}</text>`;
+  }).join('');
+  const evHtml=h.evL.map(e=>{
+    const v=s.mv[e.a], dep=e.hit150?3:(e.hit100?2:1);
+    const c=dep===3?QC('dn'):dep===2?QC('dn'):QC('dn');
+    const t1=e.hit100!=null?`破−100 ${fmtD(s.dates[e.hit100])} `:'';
+    const t2=e.hit150!=null?`破−150 ${fmtD(s.dates[e.hit150])} `:'';
+    return `<circle cx="${X(e.a).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="${dep+1.4}" fill="${c}"><title>超跌 ${fmtD(s.dates[e.a])}~${fmtD(s.dates[e.b])}（${e.weeks}周）DIF最低 ${fmt(e.min)} ${t1}${t2}</title></circle>`;
+  }).join('');
+  const evHhtml=h.evH.map(e=>{
+    const v=s.mv[e.a], dep=e.hit150?2:1;
+    const c=dep===2?QC('up'):QC('up');
+    const t1=e.hit150!=null?`破+150 ${fmtD(s.dates[e.hit150])} `:'';
+    return `<circle cx="${X(e.a).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="${dep+1.4}" fill="${c}"><title>高位 ${fmtD(s.dates[e.a])}~${fmtD(s.dates[e.b])}（${e.weeks}周）DIF最高 ${fmt(e.max)} ${t1}</title></circle>`;
+  }).join('');
+  return `<svg width="1180" viewBox="0 0 ${Wd} ${B+24}" style="max-width:100%">
+    ${grid}
+    ${segHtml(h.evL,'rgba(30,199,125,.10)','rgba(79,209,165,.16)','rgba(30,199,125,.30)')}
+    ${segHtml(h.evH,'rgba(255,77,79,.10)','','rgba(255,77,79,.26)')}
+    ${refsHtml}
+    <line x1="${padL}" y1="${mid.toFixed(1)}" x2="${Wd-padR}" y2="${mid.toFixed(1)}" stroke="${QC('line2')}" stroke-width="1"/>
+    <polyline points="${ptsS.join(' ')}" fill="none" stroke="${QC('accent-l')}" stroke-width=".9" stroke-dasharray="1 2" opacity=".8"/>
+    <polyline points="${ptsD.join(' ')}" fill="none" stroke="${QC('gold')}" stroke-width="1.6" stroke-linejoin="round"/>
+    ${evHtml}${evHhtml}${tick}
+    <text x="${Wd-padR+4}" y="${(Y(0)+12).toFixed(1)}" font-size="8.5" fill="${QC('line2')}">0</text>
+  </svg>`;
+}
+/** 前复权价格周 K 图（蜡烛，红涨绿跌）：与下方 MACD-V 图共用同一时间窗(尾部 HWIN 周)与 X 轴坐标 */
+function priceSvg(rec,h){
+  const bars=rec.bars_week, s=h.s;
+  const Wd=1180, padL=8, padR=56;                 // 与 histSvg 相同画布，保证两图 X 对齐
+  const b0=s.start+h.w0, b1=bars.length-1, W=b1-b0+1;
+  const step=(Wd-padL-padR)/(Math.max(1,W-1));
+  const T=26, B=252;
+  let lo=Infinity, hi=-Infinity;
+  for(let i=b0;i<=b1;i++){ if(bars[i].l<lo)lo=bars[i].l; if(bars[i].h>hi)hi=bars[i].h; }
+  const pad=(hi-lo)*0.06||Math.max(hi*.01,1); lo-=pad; hi+=pad;
+  const Y=v=>T+(B-T)*(1-(v-lo)/(hi-lo));
+  const X=i=>padL+(i-b0)*step;
+  const cw=Math.max(1.1,step*0.52);
+  const pf=v=>v>=100?v.toFixed(0):v.toFixed(2);
+  const grid=[], cands=[];
+  for(let k=0;k<=4;k++){
+    const v=lo+(hi-lo)*k/4, y=Y(v).toFixed(1);
+    grid.push(`<line x1="${padL}" y1="${y}" x2="${Wd-padR}" y2="${y}" stroke="${QC('line')}" stroke-width="1"/>
+      <text x="${Wd-padR+4}" y="${(+y+3).toFixed(1)}" font-size="9" fill="${QC('tx3')}">${pf(v)}</text>`);
+  }
+  for(let i=b0;i<=b1;i++){
+    const b=bars[i], x=X(i), up=b.c>=b.o;
+    const col=up?QC('up'):QC('dn');
+    const x1=(x-cw/2).toFixed(1), x2=(x+cw/2).toFixed(1);
+    const yo=Y(b.o).toFixed(1), yc=Y(b.c).toFixed(1), yh=Y(b.h).toFixed(1), yl=Y(b.l).toFixed(1);
+    const top=Math.min(+yo,+yc).toFixed(1), hh=Math.max(Math.abs(yc-yo),1).toFixed(1);
+    const pc=bars[i-1]?bars[i-1].c:null;
+    const pct=pc?` (${b.c>=pc?'+':''}${((b.c-pc)/pc*100).toFixed(2)}%)`:'';
+    cands.push(`<g><line x1="${x.toFixed(1)}" y1="${yh}" x2="${x.toFixed(1)}" y2="${yl}" stroke="${col}" stroke-width="${cw>=1.6?1:Math.max(cw*0.6,.6)}"/>
+      <rect x="${x1}" y="${top}" width="${(cw).toFixed(2)}" height="${hh}" fill="${col}" fill-opacity=".92"/>
+      <title>${b.d}\n开 ${b.o.toFixed(2)}　高 ${b.h.toFixed(2)}\n低 ${b.l.toFixed(2)}　收 ${b.c.toFixed(2)}${pct}</title></g>`);
+  }
+  let tick='';
+  for(let k=0;k<6;k++){ const i=b0+k*52; if(i>b1) break;
+    tick+=`<text x="${X(i).toFixed(1)}" y="${B+14}" text-anchor="middle" font-size="9" fill="${QC('tx3')}">${WK(bars[i].d)}</text>`;
+  }
+  return `<svg width="1180" viewBox="0 0 ${Wd} ${B+22}" style="max-width:100%">
+    ${grid.join('')}
+    ${cands.join('')}
+    ${tick}
+  </svg>`;
+}
+function advText(h){
+  const evL=h.evL, evH=h.evH, s=h.s;
+  const L15=evL.find(e=>e.hit150!=null), L10=evL.find(e=>e.hit100!=null), L1=evL[0];
+  let long,short;
+  if(L15)      long='长线(70%)重点布局窗口：'+fmtD(s.dates[L15.hit150])+' 前后周线 DIF 已深破 −150（最低 '+fmt(L15.min)+'），股息率显著抬升，可分 3~4 批建仓';
+  else if(L10) long='长线(70%)布局参考：'+fmtD(s.dates[L10.hit100])+'（周线破 −100，最低 '+fmt(L10.min)+'），可开始分批试探';
+  else if(L1)  long='长线(70%)：仅见 −50 级浅调，未达深度超跌区，维持常规定投纪律';
+  else         long='长线(70%)：近 5 年周线未破 −50，股价波动极低，按固定节奏定投即可';
+  const H1=evH[0]?evH[evH.length-1]:null, H15=h.evH.find(e=>e.hit150!=null);
+  const segs=[];
+  if(H15) segs.push('周线冲上 +150（最高 '+fmt(H15.max)+'）→ 短线不追高，长线停止再投入');
+  else if(H1) segs.push('高位轮 '+fmtD(s.dates[H1.a])+'（最高 '+fmt(H1.max)+'）→ 短线高抛区');
+  if(evL.length) segs.push('超跌低吸参考：最近一轮 '+fmtD(s.dates[evL[evL.length-1].a])+'（最低 '+fmt(evL[evL.length-1].min)+'）');
+  short=segs.length?segs.join('；'):'短线(30%)：区间窄、无极端，高抛低吸空间小，建议观望或仅日内级别操作';
+  return {long,short};
+}
+
+/* ── 弹窗骨架 ── */
+function openM(html){ const m=document.getElementById('mwin'); m.innerHTML=html; document.getElementById('mask').classList.remove('hide'); }
+function closeM(){ document.getElementById('mask').classList.add('hide'); }
+
+/* 单股历史弹窗 */
+function openHist(code){
+  const rec=store[code];
+  if(!rec||!rec.week){ openM(`<div class="mhead"><h3>${code}</h3><button class="mx" data-mx="1">关闭</button></div><div class="mbody"><div class="hnote">周线数据未加载，请先点击「刷新数据」。</div></div>`); return; }
+  const h=scanHist(rec), s=h.s;
+  const st=rec.week;
+  const {long,short}=advText(h);
+  const n0=st.mv.length, w0=h.w0;
+  const row=(typ,i,e)=>{
+    const deep=e.hit100!=null?(e.hit150!=null?('破−100 '+fmtD(s.dates[e.hit100])+'<br>破−150 '+fmtD(s.dates[e.hit150])):('破−100 '+fmtD(s.dates[e.hit100]))):'—';
+    const use=e.hit150!=null?'长线重点布局':e.hit100!=null?'长线布局区':'短线低吸参考';
+    return `<tr><td>${typ}${i}</td><td class="l">${fmtD(s.dates[e.a])}</td><td class="l">${fmtD(s.dates[e.b])}</td><td>${e.weeks}</td>
+      <td style="color:${QC('dn')};font-weight:700">${fmt(e.min)}</td><td class="l">${fmtD(s.dates[e.mi])}</td>
+      <td class="l">${deep}</td><td class="l" style="color:var(--tx2)">${use}</td></tr>`;
+  };
+  const rowH=(typ,i,e)=>{
+    const deep=e.hit150!=null?('破+150 '+fmtD(s.dates[e.hit150])):'—';
+    const use=e.hit150!=null?'极端警示·勿追':'短线高抛区';
+    return `<tr><td>${typ}${i}</td><td class="l">${fmtD(s.dates[e.a])}</td><td class="l">${fmtD(s.dates[e.b])}</td><td>${e.weeks}</td>
+      <td style="color:${QC('up')};font-weight:700">${fmt(e.max)}</td><td class="l">${fmtD(s.dates[e.mi])}</td>
+      <td class="l">${deep}</td><td class="l" style="color:var(--tx2)">${use}</td></tr>`;
+  };
+  const sL=h.evL.map((e,i)=>row('跌',i+1,e)).join('');
+  const sH=h.evH.map((e,i)=>rowH('涨',i+1,e)).join('');
+  openM(`
+  <div class="mhead"><h3>${rec.name}<em>${rec.code} · 周线 MACD-V 近 5 年（${fmtD(s.dates[w0])} ~ ${fmtD(s.dates[n0-1])}）</em></h3><span class="sub">ATR：${st.mode==='wilder'?'Wilder RMA':'MA(TR,26)'} · 前复权</span>
+    <button class="mx" data-mx="1">关闭</button></div>
+  <div class="mbody">
+    <div class="phd"><b>前复权价格 · 周 K</b><span class="tag">近 5 年（与下方 MACD-V 同窗对齐）</span><span class="src">源：<b>腾讯财经</b> 前复权 · ${fmtD(s.dates[w0])} ~ ${fmtD(s.dates[n0-1])} · 阳=涨 阴=跌</span></div>
+    <div class="histbox">${priceSvg(rec,h)}</div>
+    <div class="histcap">
+      <i><span class="sw" style="background:${QC('up')}"></span>阳线（收≥开）</i>
+      <i><span class="sw" style="background:${QC('dn')}"></span>阴线（收&lt;开）</i>
+      <i style="margin-left:auto">悬停蜡烛查看当周开高低收与涨跌幅 · 纵轴为前复权价（元）</i>
+    </div>
+    <div class="histbox" style="margin-top:8px">${histSvg(rec,h)}</div>
+    <div class="histcap">
+      <i><span class="sw" style="background:rgba(30,199,125,.30)"></span>超跌区 mv&lt;−50（深色=破 −100/−150）</i>
+      <i><span class="sw" style="background:rgba(255,77,79,.26)"></span>高位区 mv&gt;+100（深色=破 +150）</i>
+      <i><span class="sw" style="background:${QC('gold')}"></span>DIF</i>
+      <i><span class="sw" style="background:${QC('accent-l')}"></span>信号线 EMA9</i>
+      <i style="margin-left:auto">悬停圆点看轮次明细 · 阈值线：红虚线>0，绿虚线&lt;0</i>
+    </div>
+    <table class="mtab" style="margin-top:8px">
+      <tr><th>轮次</th><th class="l">触发日期</th><th class="l">结束日期</th><th>持续(周)</th><th>DIF 极值</th><th class="l">极值日期</th><th class="l">更深度阈值触发</th><th class="l">参考</th></tr>
+      ${(sL||sH)?(sL+sH):'<tr><td colspan="8" class="l" style="color:var(--tx3)">近 5 年周线 DIF 始终位于区间内，无任何阈值事件</td></tr>'}
+    </table>
+    <div class="hnote"><b>策略落点（70% 长线收息 + 30% 短线高抛低吸）</b><br>
+      <b style="color:${QC('warn')}">长线：</b>${long}<br>
+      <b style="color:${QC('accent-l')}">短线：</b>${short}</div>
+    <div class="mrow-note">口径：周线 MACD-V=(EMA12−EMA26)÷ATR(26)×100，信号线=EMA9(DIF)。「持续」为该阈值状态连续周数（超跌至回升回阈值上方为止）。本页为指标监控，不构成投资建议。</div>
+  </div>`);
+}
+
+/* ═══════════════ 事件 ═══════════════ */
+document.getElementById('refresh').onclick=()=>loadAll();
+document.getElementById('onlyalert').onchange=()=>render();
+document.getElementById('atrseg').onclick=e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  atrMode=b.dataset.a;
+  document.querySelectorAll('#atrseg button').forEach(x=>x.classList.toggle('on',x===b));
+  document.getElementById('formula').textContent = atrMode==='ma'
+    ? 'MACD-V = (EMA12 − EMA26) ÷ ATR(26) × 100　·　ATR = MA(TR,26) 简单平均'
+    : 'MACD-V = (EMA12 − EMA26) ÷ ATR(26) × 100　·　ATR = Wilder RMA(26)';
+  // 用已缓存的 K 线重算，无需重新取数
+  for(const c in store){
+    const rec=store[c];
+    if(rec.bars_day)  rec.day =macdv(rec.bars_day ,atrMode);
+    if(rec.bars_week) rec.week=macdv(rec.bars_week,atrMode);
+  }
+  render();
+};
+document.getElementById('wkseg').onclick=e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  weekMode=b.dataset.w;
+  document.querySelectorAll('#wkseg button').forEach(x=>x.classList.toggle('on',x===b));
+  render();
+};
+document.querySelectorAll('th.srt').forEach(th=>{
+  th.onclick=()=>{
+    const k=th.dataset.k;
+    if(sortKey===k) sortDir=-sortDir; else { sortKey=k; sortDir=(k==='code'||k==='name')?1:-1; }
+    render();
+  };
+});
+document.getElementById('mask').addEventListener('click',e=>{ if(e.target.id==='mask'||e.target.closest('[data-mx]')) closeM(); });
+document.getElementById('tb').addEventListener('click',e=>{
+  const hb=e.target.closest('[data-hist]');
+  if(hb){ openHist(hb.dataset.hist); return; }
+  const x=e.target.closest('[data-exp]'); if(!x) return;
+  const c=x.dataset.exp;
+  expanded.has(c)?expanded.delete(c):expanded.add(c);
+  x.classList.toggle('open',expanded.has(c));
+  const tr=x.closest('tr'); tr.classList.toggle('expanded',expanded.has(c));
+  const det=document.querySelector('[data-det="'+c+'"]');
+  if(det) det.classList.toggle('det-hidden',!expanded.has(c));
+});
+/* 启动（仅手动刷新，无定时轮询） */
+render();
+loadAll();
+</script>
+</body>
+</html>

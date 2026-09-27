@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>中证红利 40日收益差择时看板</title>
+<link rel="stylesheet" href="../theme.css">
+<script src="vendor/echarts.min.js"></script>
+<style>
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--tx);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:14px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1220px; margin:0 auto; padding:28px 20px 56px}
+  header{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:20px}
+  h1{font-size:20px; font-weight:500; margin:0 0 4px; letter-spacing:.2px}
+  .sub{font-size:12.5px; color:var(--tx3)}
+  .badge{font-size:12px; color:var(--tx2); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px 12px}
+  .grid{display:grid; gap:14px}
+  .k4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+  .k2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px}
+  .kpi{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px}
+  .kpi .lb{font-size:12.5px; color:var(--tx2)}
+  .kpi .val{font-size:26px; font-weight:600; letter-spacing:-.4px; margin-top:2px; font-variant-numeric:tabular-nums}
+  .kpi .ft{font-size:12px; color:var(--tx3); margin-top:2px}
+  .h2{font-size:14.5px; font-weight:500; margin:0 0 2px}
+  .h2sub{font-size:12.5px; color:var(--tx3); margin:0 0 14px}
+  .toolbar{display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:12px}
+  .seg{display:inline-flex; background:var(--panel3); border-radius:var(--radius-sm); padding:2px}
+  .seg button{
+    border:0; background:transparent; font:inherit; font-size:12.5px; color:var(--tx2);
+    padding:5px 13px; border-radius:6px; cursor:pointer;
+  }
+  .seg button.active{background:var(--panel2); color:var(--tx); font-weight:500}
+  .chip{
+    border:1px solid var(--line); background:var(--panel); font:inherit; font-size:12.5px; color:var(--tx2);
+    padding:5px 12px; border-radius:999px; cursor:pointer;
+  }
+  .chip.active{background:rgba(31,111,235,.16); border-color:rgba(31,111,235,.40); color:var(--accent-tx); font-weight:500}
+  .ctl{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px}
+  .row{display:flex; align-items:center; gap:12px}
+  .row label{font-size:12.5px; color:var(--tx2); width:52px; flex:none}
+  .row input[type=range]{flex:1; accent-color:var(--accent)}
+  .row .v{font-size:13px; width:56px; text-align:right; font-variant-numeric:tabular-nums; font-weight:600}
+  .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(112px,1fr)); gap:14px 10px}
+  .stat .lb{font-size:12px; color:var(--tx2)}
+  .stat .val{font-size:16px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:1px}
+  .foot-note{font-size:12px; color:var(--tx3); margin-top:14px; padding-top:12px; border-top:1px solid var(--line)}
+  .chart{width:100%}
+  #mainChart{height:400px}
+  #navChart{height:300px}
+  table{width:100%; border-collapse:collapse; font-size:13px}
+  th{text-align:left; font-weight:500; font-size:12px; color:var(--tx3); padding:0 10px 8px; border-bottom:1px solid var(--line)}
+  td{padding:8px 10px; border-bottom:1px solid var(--line); font-variant-numeric:tabular-nums}
+  th.num, td.num{text-align:right}
+  td.win{color:var(--up); font-weight:500}
+  td.lose{color:var(--dn)}
+  td.empty{text-align:center; color:var(--tx3); padding:24px}
+  .tbl-wrap{max-height:340px; overflow:auto}
+  .tag{font-size:11.5px; padding:1px 8px; border-radius:var(--radius-pill); background:rgba(31,111,235,.16); color:var(--accent-tx)}
+  .tt-date{font-size:12px; color:var(--tx3); margin-bottom:2px}
+  .tt-row{font-size:12.5px; line-height:1.7}
+  .tt-dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px}
+  footer{margin-top:30px; font-size:12px; color:var(--tx3); line-height:1.9}
+  footer b{color:var(--tx2); font-weight:600}
+  #loading{padding:60px 0; text-align:center; color:var(--tx3)}
+  .err{color:var(--up); font-size:14px}
+  .err-sub{font-size:12.5px; color:var(--tx3); line-height:1.9}
+  code{background:var(--panel2); padding:1px 6px; border-radius:4px; font-size:12px}
+  .row.wide label{width:68px}
+  .switch{display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--tx2); cursor:pointer; user-select:none}
+  .switch input{accent-color:var(--accent); width:15px; height:15px; cursor:pointer}
+  /* ── 今日操作建议 ── */
+  .advice{display:grid; grid-template-columns:minmax(250px,1fr) 1.5fr; gap:22px; align-items:center}
+  @media (max-width:780px){ .advice{grid-template-columns:1fr; gap:16px} }
+  .advice-act{font-size:30px; font-weight:700; letter-spacing:-.6px; line-height:1.25; font-variant-numeric:tabular-nums}
+  .advice-why{font-size:12.5px; color:var(--tx2); margin-top:6px; line-height:1.75}
+  .advice-cells{display:grid; grid-template-columns:repeat(auto-fit,minmax(94px,1fr)); gap:14px 10px}
+  .acell .lb{font-size:12px; color:var(--tx3)}
+  .acell .val{font-size:16px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:1px}
+  .warn{background:rgba(240,136,62,.10); border:1px solid rgba(240,136,62,.35); color:var(--warn-tx); border-radius:var(--radius-sm);
+        padding:9px 12px; font-size:12.5px; line-height:1.7; margin-top:14px}
+  .warn b{font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>中证红利 · 40日收益差择时看板</h1>
+      <div class="sub" id="span">加载中…</div>
+    </div>
+    <div class="badge">数据更新于 <span id="updated">—</span></div>
+  </header>
+
+  <div id="loading">正在加载行情数据…</div>
+
+  <div class="grid k4" style="margin-bottom:14px">
+    <div class="kpi">
+      <div class="lb">当前 40日收益差</div>
+      <div class="val" id="kpiSpread">—</div>
+      <div class="ft" id="kpiDate">—</div>
+    </div>
+    <div class="kpi">
+      <div class="lb">当前信号</div>
+      <div class="val" id="kpiSignal">—</div>
+      <div class="ft" id="kpiSignalSub">—</div>
+    </div>
+    <div class="kpi">
+      <div class="lb" id="kpiHeldLb">已持有</div>
+      <div class="val" id="kpiHeld">—</div>
+      <div class="ft" id="kpiHeldSub">—</div>
+    </div>
+    <div class="kpi">
+      <div class="lb">历史分位</div>
+      <div class="val" id="kpiPct">—</div>
+      <div class="ft" id="kpiPctSub">—</div>
+    </div>
+    <div class="kpi">
+      <div class="lb">趋势 · 收益差年线 242日</div>
+      <div class="val" id="kpiMA">—</div>
+      <div class="ft" id="kpiMAsub">—</div>
+    </div>
+  </div>
+
+  <!-- 组合版专属：今日操作建议 -->
+  <div class="card" id="adviceCard" style="margin-bottom:14px; display:none">
+    <div class="toolbar" style="margin-bottom:12px">
+      <div>
+        <div class="h2">今日操作建议</div>
+        <div class="h2sub" id="adviceDate">—</div>
+      </div>
+      <div class="badge" id="adviceBadge">组合版 · 年线分档</div>
+    </div>
+    <div class="advice">
+      <div>
+        <div class="advice-act" id="adviceAct">—</div>
+        <div class="advice-why" id="adviceWhy">—</div>
+      </div>
+      <div class="advice-cells">
+        <div class="acell"><div class="lb">收益差</div><div class="val" id="advSig">—</div></div>
+        <div class="acell"><div class="lb">年线 242日</div><div class="val" id="advMA">—</div></div>
+        <div class="acell"><div class="lb">年线位置</div><div class="val" id="advState">—</div></div>
+        <div class="acell"><div class="lb">昨仓</div><div class="val" id="advCur">—</div></div>
+        <div class="acell"><div class="lb">目标仓位</div><div class="val" id="advTgt">—</div></div>
+      </div>
+    </div>
+    <div class="warn" id="adviceWarn" style="display:none"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="toolbar">
+      <div>
+        <div class="h2">40日收益差 · 中证红利全收益 − 市场</div>
+        <div class="h2sub"><span id="divCode">—</span> 相对 <span id="mktCode">—</span>（均含分红再投）</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+        <button class="chip active" id="maToggle">年线 242日</button>
+        <div class="seg">
+          <button data-mode="wind" class="active">Wind 原口径</button>
+          <button data-mode="proxy">中证全指代理</button>
+        </div>
+      </div>
+    </div>
+    <div class="chart" id="mainChart"></div>
+    <div class="foot-note">
+      阴影区 = 持有区间 · 蓝点 = 跌破买入线 · 橙点 = 涨破卖出线 · 红线 = 收益差 242 日均线（年线）· 上/下三角 = 年线上穿/下穿 0 轴 · 拖动下方滑块缩放时间轴
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="toolbar">
+      <div>
+        <div class="h2">参数</div>
+        <div class="h2sub" id="paramSub">T 日收盘观察信号，T 日收盘成交（0 日延迟）；持仓期间吃中证红利全收益指数日收益</div>
+      </div>
+      <div class="seg" id="engineSeg">
+        <button data-engine="simple" class="active">简单版 · 单买卖线</button>
+        <button data-engine="combo">组合版 · 年线分档</button>
+      </div>
+    </div>
+
+    <!-- 简单版参数 -->
+    <div id="panelSimple">
+      <div class="ctl" style="margin-bottom:16px">
+        <div class="row">
+          <label>买入线</label>
+          <input type="range" id="buySlider" min="-8" max="0" step="0.5" value="-1">
+          <span class="v" id="buyVal">−1.0%</span>
+        </div>
+        <div class="row">
+          <label>卖出线</label>
+          <input type="range" id="sellSlider" min="1" max="15" step="0.5" value="5">
+          <span class="v" id="sellVal">+5.0%</span>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <button class="chip" data-preset="1" data-buy="-1" data-sell="5">大白优化版 −1% / +5%</button>
+        <button class="chip" data-preset="1" data-buy="-5" data-sell="10">张老师原版 −5% / +10%</button>
+        <button class="chip" data-preset="1" data-buy="-2" data-sell="3">窄格版 −2% / +3%</button>
+        <button class="chip" data-preset="1" data-buy="-1" data-sell="8">宽卖版 −1% / +8%</button>
+      </div>
+    </div>
+
+    <!-- 组合版参数 -->
+    <div id="panelCombo" style="display:none">
+      <div class="ctl" style="margin-bottom:14px">
+        <div class="row wide">
+          <label title="两档共用的买入线：收益差跌破即建仓">买入线</label>
+          <input type="range" id="cBuy" min="-5" max="0" step="0.5" value="-1">
+          <span class="v" id="cBuyVal">−1.0%</span>
+        </div>
+        <div class="row wide">
+          <label title="年线在 0 轴上方（红利相对走强）时使用的卖出线，可放宽让利润跑">卖线·强</label>
+          <input type="range" id="cSellUp" min="3" max="15" step="0.5" value="8">
+          <span class="v" id="cSellUpVal">+8.0%</span>
+        </div>
+        <div class="row wide">
+          <label title="年线在 0 轴下方（红利相对走弱）时使用的卖出线，收紧以尽快落袋">卖线·弱</label>
+          <input type="range" id="cSellDown" min="2" max="10" step="0.5" value="5">
+          <span class="v" id="cSellDownVal">+5.0%</span>
+        </div>
+        <div class="row wide">
+          <label title="年线在 0 轴下方时，持仓比例的上限（弱市不满仓）">弱市上限</label>
+          <input type="range" id="cCapLo" min="0" max="100" step="10" value="50">
+          <span class="v" id="cCapLoVal">50%</span>
+        </div>
+        <div class="row wide">
+          <label title="年线在 0 轴上方时，在 100% 基础上再加多少仓位（>0 即为使用杠杆）">强市加仓</label>
+          <input type="range" id="cAddUp" min="0" max="100" step="10" value="0">
+          <span class="v" id="cAddUpVal">+0%</span>
+        </div>
+        <div class="row wide">
+          <label title="加仓部分（超出 100% 的仓位）按此年化利率计融资成本；加仓为 0 时不生效">融资成本</label>
+          <input type="range" id="cFin" min="0" max="12" step="1" value="6">
+          <span class="v" id="cFinVal">6%/年</span>
+        </div>
+        <div class="row wide">
+          <label title="每次调仓的单边交易成本，用于检验成本敏感性">单边成本</label>
+          <input type="range" id="cCost" min="0" max="20" step="1" value="0">
+          <span class="v" id="cCostVal">0 bps</span>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <button class="chip" data-combo="P2">P2 分层卖线 + 弱市减半 · 无杠杆</button>
+        <button class="chip" data-combo="P3">P3 弱市封顶 30%</button>
+        <button class="chip" data-combo="P4">P4 强市加仓 30%</button>
+        <button class="chip" data-combo="P5">P5 强市加仓 50%</button>
+        <button class="chip" data-combo="P0">P0 不分层 · 对照</button>
+      </div>
+      <div class="foot-note" style="margin-top:12px">
+        <b>组合版怎么走</b>：年线在 <b>0 轴上方</b> → 卖出线放宽到「卖线·强」、仓位维持 100%（或按「强市加仓」放大）；年线在 <b>0 轴下方</b> → 卖出线收紧到「卖线·弱」、仓位上限压到「弱市上限」。年线穿轴当天按新档位调仓一次。
+      </div>
+    </div>
+  </div>
+
+  <div class="grid k2" style="margin-bottom:14px">
+    <div class="card">
+      <div class="h2" id="perfTitle">策略表现</div>
+      <div class="h2sub" id="perfSub">全区间 · 按上述参数实时重算</div>
+      <div class="stats">
+        <div class="stat"><div class="lb">累计收益</div><div class="val" id="statTotal">—</div></div>
+        <div class="stat"><div class="lb">年化收益</div><div class="val" id="statAnnual">—</div></div>
+        <div class="stat"><div class="lb">年化超额</div><div class="val" id="statExcess">—</div></div>
+        <div class="stat"><div class="lb">最大回撤</div><div class="val" id="statMDD">—</div></div>
+        <div class="stat"><div class="lb" id="statTradesLb">交易次数</div><div class="val" id="statTrades">—</div></div>
+        <div class="stat"><div class="lb">胜率</div><div class="val" id="statWin">—</div></div>
+        <div class="stat"><div class="lb">盈亏比</div><div class="val" id="statPL">—</div></div>
+        <div class="stat"><div class="lb">持仓占比</div><div class="val" id="statHold">—</div></div>
+        <div class="stat"><div class="lb">平均持仓</div><div class="val" id="statAvgHold">—</div></div>
+        <div class="stat"><div class="lb">年化波动</div><div class="val" id="statVol">—</div></div>
+        <div class="stat"><div class="lb">Sharpe</div><div class="val" id="statSharpe">—</div></div>
+        <div class="stat"><div class="lb">平均仓位</div><div class="val" id="statAvgW">—</div></div>
+        <div class="stat"><div class="lb">换手倍数</div><div class="val" id="statTurn">—</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="h2" id="bhTitle">买入持有基准</div>
+      <div class="h2sub" id="bhSub">始终满仓中证红利全收益指数</div>
+      <div class="stats">
+        <div class="stat"><div class="lb">累计收益</div><div class="val" id="bhTotal">—</div></div>
+        <div class="stat"><div class="lb">年化收益</div><div class="val" id="bhAnnual">—</div></div>
+        <div class="stat"><div class="lb">最大回撤</div><div class="val" id="bhMDD">—</div></div>
+      </div>
+      <div class="foot-note">年化超额 = 策略年化 − 买入持有年化</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="h2">净值对比</div>
+    <div class="h2sub" id="navSub">对数坐标 · 起始净值 1.0</div>
+    <div class="chart" id="navChart"></div>
+  </div>
+
+  <div class="card">
+    <div class="toolbar" style="margin-bottom:8px">
+      <div class="h2" style="margin:0"><span id="tradeTitle">交易明细</span> · 共 <span id="tradeCount">0</span> 笔</div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr id="tradeHead"></tr>
+        </thead>
+        <tbody id="tradeBody"></tbody>
+      </table>
+    </div>
+    <div class="foot-note" id="tradeNote">—</div>
+  </div>
+
+  <footer>
+    <div><b>数据来源</b>：Wind 万得金融数据服务（<code>index_data.get_index_kline</code>）· 中证红利全收益 <code>H00922.CSI</code> · 万得全A <code>881001.WI</code>（Wind 口径为全收益指数）· 代理口径 <code>H00985.CSI</code> 中证全指全收益。数据来源于万得 Wind 金融数据服务。</div>
+    <div><b>口径说明</b>：40 日收益差 = 中证红利全收益 40 日收益率 − 市场指数 40 日收益率，逐日滚动。窗口 40 个交易日取自原策略设定。</div>
+    <div><b>年线说明</b>：收益差年线 = 40 日收益差的 242 日均线（约一年交易日）。其上穿 0 轴代表中证红利相对市场趋势转强，下穿 0 轴则为转弱。该信号源自张翼轸 EarlETF《轮动三棱镜使用指南：三套指标，五个用法》。在「简单版」中它仅作趋势参考、<b>不参与</b>买入线/卖出线策略的信号计算；在「组合版」中它作为状态闸门参与分档。</div>
+    <div><b>组合方案说明</b>：年线在 0 轴上方时卖出线放宽（默认 <code>+8%</code>），年线在 0 轴下方时卖出线收紧（默认 <code>+5%</code>）且仓位上限压到「弱市上限」（默认 <code>50%</code>），年线穿轴当日按新档位调仓一次；「强市加仓」（默认 <code>+0%</code>）在 100% 基础上放大仓位，超出部分按「融资成本」（默认 <code>6%/年</code>）逐日计息。<b>默认配置不含杠杆</b>，历史回测（2015-02 ~ 2026-09）累计 +227.99%、年化 +11.17%、最大回撤 −22.39%；一旦启用「强市加仓 50%」，同一区间累计升至 +339.91%~+412.31%（含 / 不含融资成本），但最大回撤扩大到 −32.19%~−33.37%，<b>且杠杆仓位在快速下跌中存在强制平仓风险</b>。</div>
+    <div><b>回测假设</b>：T 日收盘观察信号、T 日收盘成交（0 日延迟，故实盘会有收盘集合竞价/滑点偏差，严格实盘宜按次日开盘或次日收盘执行）；「单边成本」默认 0 bps，可拖动检验成本敏感性（P2 口径下 20 bps 仍为 +207.36%）；持仓期间按指数全收益计算，未考虑 ETF 跟踪误差与管理费。组合版的「区间收益」按含成本净值逐段相除得出，各段连乘 = 累计收益。</div>
+    <div style="margin-top:10px"><b>免责声明</b>：以上内容基于公开数据和量化分析，仅供参考，不构成投资建议。市场有风险，投资需谨慎。任何投资决策应结合个人风险承受能力、资金状况和投资目标独立判断，必要时咨询持牌专业机构。过往表现不预示未来收益。</div>
+  </footer>
+</div>
+
+<!-- 内联数据：双击本文件（file://）时也能源源不断供数，不依赖 HTTP 服务 -->
+<!-- 本地快照：老站数据不可达时的兜底，保证页面不空白 -->
+<script src="data/data.js?v=3"></script>
+<!-- 老站最新数据：正常时覆盖上一行（同域，无跨域限制） -->
+<script src="https://sfj2450943.github.io/dividend-spread-timing/data/data.js"></script>
+<script src="app.js?v=8"></script>
+</body>
+</html>

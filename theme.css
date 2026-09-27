@@ -1,0 +1,251 @@
+/* ==========================================================================
+   量化策略汇总站 · 唯一主题源
+   --------------------------------------------------------------------------
+   三个策略页（macdv-monitor / dual-factor-rotation / dividend-spread-timing）
+   与门户页共用本文件。改动此处 = 全站同步。
+
+   约定：
+   1. 变量名统一，不要在页面里再定义 :root 颜色。
+   2. 组件类一律 q- 前缀，避免与各页原有 .card/.btn/.badge 冲突。
+   3. 涨跌语义全站统一为 A 股口径：红涨绿跌。
+   4. 子页手写 SVG 不认 CSS 变量，用 sc-* / fc-* 工具类，
+      或由 JS 调 QC(name) 读取变量值。
+   ========================================================================== */
+
+:root{
+  /* 让原生表单控件（range 轨道、勾选框、滚动条）走深色渲染 */
+  color-scheme:dark;
+
+  /* ── 底层 ───────────────────────────────────────────── */
+  --bg:#0d1117;          /* 页面底 */
+  --bg2:#0b0f17;         /* 凹陷区：图表底、输入框 */
+  --panel:#151b23;       /* 卡片 */
+  --panel2:#1b222c;      /* 卡内嵌块 / 表头 / 次级按钮 */
+  --panel3:#11171f;      /* 更深一级：表头首行、分段底 */
+  --panel-h:#243040;     /* 交互态：按钮 / 小控件 hover */
+  --row-h:#1a212b;       /* 表格行 hover */
+  --row-det:#131a22;     /* 表格展开明细行 */
+  --line:#252d38;        /* 主分隔线 */
+  --line2:#323c4a;       /* 强边框 / hover 边框 */
+
+  /* ── 文字 ───────────────────────────────────────────── */
+  --tx:#e6edf3;
+  --tx2:#9aa7b6;
+  --tx3:#6b7889;
+
+  /* ── 语义色（A 股口径：红涨绿跌，全站强制）───────────── */
+  --up:#ff4d4f;          /* 涨 / 盈利 */
+  --dn:#1ec77d;          /* 跌 / 亏损 */
+  --upz:rgba(255,77,79,.09);      /* 淡底 */
+  --dnz:rgba(30,199,125,.09);
+  --upb:rgba(255,77,79,.20);      /* 强底 */
+  --dnb:rgba(30,199,125,.20);
+
+  /* ── 强调色 ─────────────────────────────────────────── */
+  --accent:#1f6feb;      /* 主：按钮 / 选中态 / 链接 / 主数据线 */
+  --accent-h:#2b7cf7;
+  --accent-l:#4d8bff;    /* 图表用的亮一档蓝 */
+  --accent-tx:#8ab4ff;   /* 半透明强调底上的文字 */
+  --gold:#f0a020;        /* 次：评分 / 排名 / 持仓 */
+  --warn:#f0883e;        /* 警示 */
+  --warn-tx:#f5b26b;     /* 警示底上的文字 */
+
+  /* ── 形体 ───────────────────────────────────────────── */
+  --radius:12px;
+  --radius-sm:8px;
+  --radius-lg:16px;
+  --radius-pill:999px;
+  --shadow:0 1px 2px rgba(0,0,0,.25);        /* 卡片：扁平优先 */
+  --shadow-lg:0 20px 70px rgba(0,0,0,.55);   /* 仅浮层 / 弹窗 */
+
+  /* ── 版式 ───────────────────────────────────────────── */
+  --maxw:1220px;         /* 常规内容宽度 */
+  --maxw-wide:1720px;    /* 宽表页面（如 macdv-monitor 的多列监控表） */
+  --gap:14px;
+  --fs:14px;             /* 基准 */
+  --fs-sm:12.5px;        /* 次级 */
+  --fs-xs:11px;          /* 标签 / 轴 */
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+
+/* ==========================================================================
+   基础
+   ========================================================================== */
+
+*,*::before,*::after{box-sizing:border-box}
+
+html,body{
+  margin:0;
+  background:var(--bg);
+  color:var(--tx);
+  font:var(--fs)/1.6 var(--font);
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+
+/* 数字一律等宽，避免跳动 */
+.q-num{font-variant-numeric:tabular-nums}
+
+/* 语义文字色 */
+.q-up{color:var(--up)}
+.q-dn{color:var(--dn)}
+.q-tx2{color:var(--tx2)}
+.q-tx3{color:var(--tx3)}
+.q-accent{color:var(--accent)}
+.q-gold{color:var(--gold)}
+
+/* ==========================================================================
+   布局
+   ========================================================================== */
+
+.q-wrap{max-width:var(--maxw);margin:0 auto;padding:28px 20px 56px}
+
+.q-grid{display:grid;gap:var(--gap)}
+.q-grid-2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+.q-grid-3{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.q-grid-4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+
+/* ==========================================================================
+   组件
+   ========================================================================== */
+
+/* ── 卡片 ─────────────────────────────────────────────── */
+.q-card{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  padding:18px 20px;
+}
+.q-card-head{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:10px;flex-wrap:wrap;
+  padding-bottom:12px;margin-bottom:14px;
+  border-bottom:1px solid var(--line);
+}
+.q-card-head h2,.q-card-head h3{
+  margin:0;font-size:14.5px;font-weight:500;line-height:1.4;
+}
+
+/* ── 区块标题 ─────────────────────────────────────────── */
+.q-h1{margin:0 0 4px;font-size:20px;font-weight:500;letter-spacing:.2px;line-height:1.35}
+.q-h2{margin:0 0 2px;font-size:14.5px;font-weight:500}
+.q-sub{margin:0;font-size:var(--fs-sm);color:var(--tx3)}
+
+/* ── 按钮 ─────────────────────────────────────────────── */
+.q-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  height:36px;padding:0 16px;
+  border:1px solid var(--line2);border-radius:var(--radius-sm);
+  background:var(--panel2);color:var(--tx);
+  font:inherit;font-size:var(--fs-sm);font-weight:500;
+  cursor:pointer;transition:background .15s,border-color .15s;
+  text-decoration:none;
+}
+.q-btn:hover{background:#243040;border-color:#435265;color:var(--tx)}
+.q-btn-pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.q-btn-pri:hover{background:var(--accent-h);border-color:var(--accent-h);color:#fff}
+.q-btn-ghost{background:transparent;color:var(--tx2)}
+.q-btn-ghost:hover{background:var(--panel2);color:var(--tx)}
+.q-btn:disabled{opacity:.55;cursor:not-allowed}
+
+/* ── 分段控件 ─────────────────────────────────────────── */
+.q-seg{display:inline-flex;background:var(--panel3);border:1px solid var(--line);border-radius:var(--radius-sm);padding:2px}
+.q-seg button{
+  border:0;background:transparent;color:var(--tx2);
+  font:inherit;font-size:var(--fs-sm);
+  padding:5px 13px;border-radius:6px;cursor:pointer;transition:all .15s;
+}
+.q-seg button:hover{color:var(--tx)}
+.q-seg button.active,.q-seg button.on{background:var(--panel2);color:var(--tx);font-weight:500}
+
+/* ── 胶囊标签 ─────────────────────────────────────────── */
+.q-pill{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 11px;border-radius:var(--radius-pill);
+  border:1px solid var(--line2);background:var(--panel2);
+  color:var(--tx2);font-size:var(--fs-xs);font-weight:500;
+  white-space:nowrap;
+}
+.q-pill-accent{background:rgba(31,111,235,.16);border-color:rgba(31,111,235,.35);color:var(--accent-tx)}
+.q-pill-gold{background:rgba(240,160,32,.16);border-color:rgba(240,160,32,.35);color:var(--gold)}
+.q-pill-up{background:var(--upb);border-color:rgba(255,77,79,.35);color:#ff8a8c}
+.q-pill-dn{background:var(--dnb);border-color:rgba(30,199,125,.35);color:#5fdcb0}
+
+/* ── KPI ──────────────────────────────────────────────── */
+.q-kpi{
+  background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:16px 18px;
+}
+.q-kpi .lb{font-size:var(--fs-sm);color:var(--tx2)}
+.q-kpi .val{margin-top:2px;font-size:26px;font-weight:500;letter-spacing:-.4px;font-variant-numeric:tabular-nums}
+.q-kpi .ft{margin-top:2px;font-size:var(--fs-xs);color:var(--tx3)}
+
+/* ── 表格 ─────────────────────────────────────────────── */
+.q-table{width:100%;border-collapse:collapse;font-size:var(--fs-sm)}
+.q-table th{
+  text-align:left;font-weight:500;font-size:var(--fs-xs);color:var(--tx3);
+  padding:0 10px 8px;border-bottom:1px solid var(--line);white-space:nowrap;
+}
+.q-table td{
+  padding:9px 10px;border-bottom:1px solid var(--line);
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.q-table th.num,.q-table td.num{text-align:right}
+.q-table tbody tr:hover td{background:var(--panel2)}
+
+/* ── 提示条 ───────────────────────────────────────────── */
+.q-note{
+  border:1px solid var(--line2);border-left:3px solid var(--accent);
+  border-radius:var(--radius-sm);background:var(--panel);
+  padding:10px 14px;font-size:var(--fs-sm);color:var(--tx2);line-height:1.7;
+}
+.q-note-warn{border-left-color:var(--warn);color:var(--warn-tx)}
+
+/* ── 页脚 ─────────────────────────────────────────────── */
+.q-footer{
+  margin-top:30px;padding-top:18px;border-top:1px solid var(--line);
+  font-size:var(--fs-xs);color:var(--tx3);line-height:1.9;
+}
+.q-footer .risk{color:#ff8a8a}
+
+/* ==========================================================================
+   SVG / 图表配色工具类
+   手写 SVG 的 stroke/fill 不认 CSS 变量，用这些类挂载。
+   ========================================================================== */
+
+.sc-up{stroke:var(--up)}
+.sc-dn{stroke:var(--dn)}
+.sc-axis{stroke:var(--line2)}
+.sc-grid{stroke:var(--line)}
+.sc-zero{stroke:var(--tx3)}
+.sc-accent{stroke:var(--accent-l)}
+.sc-gold{stroke:var(--gold)}
+.sc-warn{stroke:var(--warn)}
+.sc-tx2{stroke:var(--tx2)}
+
+.fc-up{fill:var(--up)}
+.fc-dn{fill:var(--dn)}
+.fc-accent{fill:var(--accent-l)}
+.fc-gold{fill:var(--gold)}
+.fc-tx2{fill:var(--tx2)}
+.fc-tx3{fill:var(--tx3)}
+
+/* 坐标轴 / 网格文字 */
+text.ax{fill:var(--tx3);font-size:10px}
+
+/* ==========================================================================
+   ECharts 深色主题（供 app.js 读取）
+   ========================================================================== */
+:root{
+  --ec-text:#6b7889;      /* 轴标签 */
+  --ec-text2:#9aa7b6;     /* tooltip 正文 */
+  --ec-axis:#323c4a;      /* 轴线 */
+  --ec-split:#1b222c;     /* 网格线 */
+  --ec-bg:transparent;    /* 图表底：透明，露出卡片底 */
+  --ec-tooltip-bg:#1b222c;
+  --ec-tooltip-line:#323c4a;
+  --ec-zoom-fill:rgba(77,139,255,.12);
+}
