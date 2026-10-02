@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>量化策略看板 · 汇总</title>
-<meta name="description" content="个人量化研究：三个策略监控看板的统一入口。不构成任何投资建议。">
+<meta name="description" content="个人量化研究：四个策略监控看板的统一入口。不构成任何投资建议。">
 <link rel="stylesheet" href="theme.css">
 <style>
   .hub-head{margin-bottom:22px}
@@ -62,7 +62,7 @@
   <header class="hub-head">
     <h1 class="q-h1">量化策略看板</h1>
     <p class="q-sub">
-      三个策略监控与择时看板的统一入口 · 数据由各页自行实时获取
+      四个策略监控与择时看板的统一入口 · 数据由各页自行实时获取
     </p>
   </header>
 
@@ -84,7 +84,7 @@
         按 ±50 / ±150 分档判断超买超卖阶段，并追踪信号变化。
       </p>
       <div class="facts">
-        <div class="fact"><span class="k">标的</span><span class="v">11 只</span></div>
+        <div class="fact"><span class="k">标的</span><span class="v">12 只</span></div>
         <div class="fact"><span class="k">周期</span><span class="v">日线 / 周线双周期</span></div>
         <div class="fact"><span class="k">参数</span><span class="v">EMA12 / EMA26 / ATR26</span></div>
       </div>
@@ -138,10 +138,32 @@
       </div>
     </a>
 
+    <!-- ④ 红利低波均线乖离 -->
+    <a class="hub" href="hongli-monitor/" style="--c:#a371f7">
+      <div class="top">
+        <span class="idx">04</span>
+        <span class="q-pill" style="background:rgba(163,113,247,.16);border-color:rgba(163,113,247,.35);color:#c9a8ff">择时 · 均线乖离</span>
+      </div>
+      <h2>红利低波 · 均线乖离策略监控台</h2>
+      <p class="desc">
+        以 512890 收盘价与 N 日均线的乖离为信号：跌破均线买入、站上均线 ×1.07 止盈，满仓／空仓二态；
+        另附参数热力图（均线周期 × 止盈偏离）与 MA182 / MA200 净值对照。
+      </p>
+      <div class="facts">
+        <div class="fact"><span class="k">标的</span><span class="v">512890 红利低波ETF</span></div>
+        <div class="fact"><span class="k">参数</span><span class="v">MA182 / MA200 · 止盈 ×1.07</span></div>
+        <div class="fact"><span class="k">口径</span><span class="v">不复权价 + 1:2 拆分还原</span></div>
+      </div>
+      <div class="foot">
+        <span class="src">腾讯行情 · 本地快照</span>
+        <span class="go">进入 <span aria-hidden="true">→</span></span>
+      </div>
+    </a>
+
   </div>
 
   <footer class="q-footer">
-    <div>© 2026 · 个人量化研究 · 本站与三个策略页共用同一套设计主题</div>
+    <div>© 2026 · 个人量化研究 · 本站与四个策略页共用同一套设计主题</div>
     <div class="risk">风险提示：以上内容均为个人策略研究与记录，不构成任何投资建议。</div>
   </footer>
 

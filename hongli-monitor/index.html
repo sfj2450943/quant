@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>红利低波均线乖离策略 · 监控台</title>
+<link rel="stylesheet" href="../theme.css">
+<style>
+/* ── 页面样式 ──
+   主题 token（配色 / 文字 / 形体 / 版式）全部来自 ../theme.css，本页不再自定义颜色，
+   改主题只需改 theme.css。这里只保留本页独有的组件样式。
+   手写 SVG 的 fill/stroke 不认 CSS 变量 → JS 里统一用 QC() 读 theme.css 的 token 真值。 */
+.wrap{max-width:var(--maxw);margin:0 auto;padding:28px 20px 56px}
+
+/* ── 页头 ── */
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-bottom:6px}
+h1{font-size:20px;font-weight:500;margin:0;letter-spacing:.2px}
+.tag{font-size:var(--fs-xs);color:var(--tx2);background:var(--panel2);border:1px solid var(--line2);
+  border-radius:var(--radius-pill);padding:3px 11px;font-weight:500}
+.tag.live{background:var(--dnb);border-color:rgba(30,199,125,.35);color:#5fdcb0}
+.tag.sim{background:rgba(240,160,32,.16);border-color:rgba(240,160,32,.35);color:var(--gold)}
+.sub{color:var(--tx3);font-size:var(--fs-sm);margin:2px 0 18px}
+h2{font-size:14.5px;font-weight:500;margin:30px 0 12px;padding-left:10px;border-left:3px solid var(--accent)}
+
+/* ── 信号卡 ── */
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.sc{border-radius:var(--radius);padding:16px 18px;border:1px solid var(--line);
+  background:var(--panel);box-shadow:var(--shadow)}
+.sc.buy{background:var(--upz);border-color:rgba(255,77,79,.32)}
+.sc.hold{background:rgba(77,139,255,.09);border-color:rgba(77,139,255,.30)}
+.sc.sell{background:rgba(240,160,32,.10);border-color:rgba(240,160,32,.32)}
+.sc.wait{background:var(--panel2);border-color:var(--line2)}
+.sc .hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.sc .nm{font-size:var(--fs-sm);color:var(--tx2)}
+.badge{font-size:var(--fs-xs);font-weight:500;border-radius:var(--radius-pill);padding:3px 10px;color:#fff}
+.buy .badge{background:var(--up)} .hold .badge{background:var(--accent)}
+.sell .badge{background:var(--gold)} .wait .badge{background:var(--tx3)}
+.act{font-size:14px;font-weight:500;margin:2px 0 12px}
+.rows{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;font-size:var(--fs-sm)}
+.rows .k{color:var(--tx3);font-size:var(--fs-xs);margin-bottom:1px}
+.rows .v{font-variant-numeric:tabular-nums;font-weight:500}
+.pos{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line2);
+  font-size:var(--fs-sm);color:var(--tx2)}
+.pos b{color:var(--tx)}
+
+/* ── KPI ── */
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin:18px 0 6px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:16px 18px}
+.kpi .k{font-size:var(--fs-sm);color:var(--tx2);margin-bottom:2px}
+.kpi .v{font-size:26px;font-weight:500;letter-spacing:-.4px;font-variant-numeric:tabular-nums}
+.kpi .s{font-size:var(--fs-xs);color:var(--tx3);margin-top:2px}
+
+/* ── 通用卡片 ── */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:18px 20px;margin-bottom:14px}
+
+/* ── 价格通道 ── */
+.rail{display:flex;gap:0;height:34px;border-radius:var(--radius-sm);overflow:hidden;
+  border:1px solid var(--line);position:relative}
+.seg{display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);color:#fff}
+.seg.b{background:rgba(255,77,79,.55)}.seg.h{background:rgba(77,139,255,.50)}.seg.s{background:rgba(240,160,32,.55)}
+.mk{position:absolute;top:-14px;transform:translateX(-50%);font-size:var(--fs-xs);font-weight:600;white-space:nowrap}
+.mk::after{content:"";display:block;width:0;height:0;margin:1px auto 0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid currentColor}
+
+/* ── 分段控件 ── */
+.ctl{display:flex;gap:8px;margin:0 0 10px;flex-wrap:wrap}
+.ctl button{font:inherit;font-size:var(--fs-sm);padding:5px 13px;border-radius:var(--radius-sm);
+  border:1px solid var(--line2);background:var(--panel2);color:var(--tx2);
+  cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.ctl button:hover{background:var(--panel-h);color:var(--tx)}
+.ctl button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:500}
+.ctl .sp{flex:1}
+
+/* ── 表格 ── */
+table{width:100%;border-collapse:collapse;font-size:var(--fs-sm)}
+th,td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{background:var(--panel3);color:var(--tx3);font-weight:500;font-size:var(--fs-xs)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+tbody tr:hover td{background:var(--row-h)}
+tr.hl td{background:rgba(31,111,235,.10)}
+
+/* ── 图例 / 说明 ── */
+.legend{display:flex;gap:18px;align-items:center;font-size:var(--fs-xs);color:var(--tx2);
+  flex-wrap:wrap;margin-top:8px}
+.legend i{display:inline-block;width:16px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;vertical-align:middle;margin-right:4px}
+.note{border:1px solid var(--line2);border-left:3px solid var(--accent);border-radius:var(--radius-sm);
+  background:var(--panel);padding:14px 18px;font-size:var(--fs-sm);color:var(--tx2);line-height:1.7}
+.note b{color:var(--tx)}
+.note ul{margin:6px 0 0;padding-left:18px}
+.small{font-size:var(--fs-xs);color:var(--tx3)}
+.empty{padding:20px;text-align:center;color:var(--tx3);font-size:var(--fs-sm)}
+code{background:var(--panel2);border:1px solid var(--line2);border-radius:4px;padding:1px 5px;
+  font-family:var(--mono);font-size:var(--fs-xs);color:var(--tx2)}
+@media(max-width:880px){.cards{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(3,1fr)}.rows{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="title">红利低波 · 均线乖离策略监控台</h1>
+    <span class="tag" id="tagData"></span>
+    <span class="tag live" id="tagLive" style="display:none"></span>
+    <span class="tag sim">策略为模拟跟踪 · 非实盘</span>
+  </header>
+  <div class="sub" id="subRule"></div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <h2>今日信号</h2>
+  <div class="cards" id="cards"></div>
+
+  <h2>价格通道位置（以 MA182 为例）</h2>
+  <div class="card">
+    <div class="rail" id="rail"></div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--up)"></span>买入区（收盘价 &lt; 均线）</span>
+      <span><span class="dot" style="background:var(--accent-l)"></span>持有区（均线 ~ 均线×1.07）</span>
+      <span><span class="dot" style="background:var(--gold)"></span>止盈区（收盘价 &gt; 均线×1.07）</span>
+    </div>
+    <div class="small" id="railNote" style="margin-top:8px"></div>
+  </div>
+
+  <h2>价格与信号</h2>
+  <div class="card">
+    <div class="ctl">
+      <button data-ma="182" class="on">MA182（原参数）</button>
+      <button data-ma="200">MA200</button>
+      <span class="sp"></span>
+      <button data-rg="243">近1年</button>
+      <button data-rg="730" class="on">近3年</button>
+      <button data-rg="0">全部</button>
+    </div>
+    <div id="priceChart"></div>
+    <div class="legend" id="priceLegend"></div>
+  </div>
+
+  <h2>策略净值（模拟，初始净值 1.0）</h2>
+  <div class="card">
+    <div id="eqChart"></div>
+    <div class="legend" id="eqLegend"></div>
+    <div class="small" id="eqNote" style="margin-top:8px"></div>
+  </div>
+
+  <h2>参数热力图：均线周期 × 止盈偏离</h2>
+  <div class="card">
+    <div id="heat"></div>
+    <div class="legend" id="heatLegend"></div>
+    <div class="small" id="heatNote" style="margin-top:8px"></div>
+    <div style="margin-top:14px;overflow-x:auto">
+      <table><thead><tr><th>均线周期</th><th class="num">该周期最优偏离</th><th class="num">最优年化</th><th class="num">偏离固定 7% 时年化</th><th class="num">调参增益</th></tr></thead>
+      <tbody id="heatTable"></tbody></table>
+    </div>
+  </div>
+
+  <h2>历史调仓记录</h2>
+  <div class="card" style="padding:14px 0 0">
+    <div class="ctl" style="padding:0 18px">
+      <button data-tma="182" class="on">MA182</button>
+      <button data-tma="200">MA200</button>
+    </div>
+    <div id="trades"></div>
+  </div>
+
+  <h2>规则、口径与风险</h2>
+  <div class="note" id="notes"></div>
+
+  <div class="small" style="margin-top:24px;text-align:center">
+    数据源：腾讯行情（不复权日线 + 实时快照）｜更新方式：在本目录运行
+    <code>python update_data.py</code> 重新生成 data.js｜本页仅为量化研究复现，不构成投资建议
+  </div>
+</div>
+<script src="data.js"></script>
+<script>
+(function(){
+  var D = window.HL_DATA;
+  if(!D){ document.getElementById('cards').innerHTML='<div class="empty">data.js 未加载，请先运行 update_data.py</div>'; return; }
+  /* 手写 SVG 的 fill/stroke 不认 CSS 变量 → 统一从 theme.css 的 token 读真值再用。
+     集中取一次，避免每处字符串拼接都写一遍 getComputedStyle。 */
+  var QC = function(n){ return getComputedStyle(document.documentElement).getPropertyValue('--'+n).trim(); };
+  var C_TX=QC('tx'), C_TX2=QC('tx2'), C_TX3=QC('tx3'), C_LINE=QC('line'), C_LINE2=QC('line2'),
+      C_PANEL=QC('panel'), C_UP=QC('up'), C_DN=QC('dn'),
+      C_ACC=QC('accent-l'), C_GOLD=QC('gold');
+  var L = D.latest, S = D.stats, SER = D.series;
+  var pct = function(x,d){ d = d==null?2:d; return (x*100).toFixed(d)+'%'; };
+  var sgn = function(x,d){ d = d==null?2:d; return (x>=0?'+':'')+(x*100).toFixed(d)+'%'; };
+  var num = function(x,d){ d = d==null?4:d; return Number(x).toFixed(d); };
+  var STATE = {
+    buy:{cls:'buy',label:'买入区',act:'可买入 / 定投'},
+    hold:{cls:'hold',label:'持仓中',act:'继续持有，等止盈线'},
+    sell:{cls:'sell',label:'止盈信号',act:'收盘站上止盈线 → 次日开盘清仓'},
+    wait:{cls:'wait',label:'观望区',act:'空仓等待价格回到均线下方'}
+  };
+
+  document.getElementById('tagData').textContent = '行情数据 ' + D.meta.data_date;
+  var esc = function(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  document.getElementById('subRule').innerHTML =
+    esc(D.meta.name + '（' + D.meta.code + '）· 跟踪 ' + D.meta.index + '　｜　' + D.meta.rule
+    + '　｜　数据更新于 ' + D.meta.updated);
+
+  /* 实时快照(可选增强): 腾讯行情脚本加载成功则显示 */
+  window.__live = function(){
+    try{
+      var q = window['v_sh512890'];
+      if(!q) return;
+      var v = q.split('~');
+      var t = document.getElementById('tagLive');
+      t.style.display = '';
+      t.textContent = '实时 ' + v[3] + '（' + (Number(v[32]) > 0 ? '+' : '') + v[32] + '%）';
+    }catch(e){}
+  };
+
+  /* KPI */
+  var kpis = [
+    ['最新收盘', num(L.close,3), D.meta.data_date + '　' + (L.chg_pct>=0?'▲':'▼') + ' ' + pct(Math.abs(L.chg_pct))],
+    ['MA182', num(L.ma182,4), '20日变动 ' + (L.ma182_chg20>=0?'+':'') + num(L.ma182_chg20,4)],
+    ['止盈线 MA182×1.07', num(L.sell182,4), '现价需再涨 ' + pct(-L.dev_sell182)],
+    ['MA200', num(L.ma200,4), '20日变动 ' + (L.ma200_chg20>=0?'+':'') + num(L.ma200_chg20,4)],
+    ['现价偏离 MA182', sgn(L.dev182), '买入触发价 ' + num(L.ma182,4)],
+    ['中证红利 PE', D.pe?Number(D.pe).toFixed(2):'—', 'PE&lt;20 条件未构成约束']
+  ];
+  document.getElementById('kpis').innerHTML = kpis.map(function(k){
+    return '<div class="kpi"><div class="k">'+k[0]+'</div><div class="v">'+k[1]+'</div><div class="s">'+k[2]+'</div></div>';
+  }).join('');
+
+  /* 信号卡 */
+  function card(w){
+    var st = L['state'+w], m = STATE[st];
+    var p = D.pos[w], holding = st==='hold';
+    var posTxt = p ? '模拟持仓：' + p.buy_date + ' 买入 @ ' + num(p.buy_px,4) + '　浮盈 <b style="color:'
+      + (p.ret>=0?'var(--up)':'var(--dn)') + '">' + sgn(p.ret) + '</b>　已持有 ' + p.days + ' 天'
+      : '模拟状态：空仓（等待价格回落至均线下方）';
+    return '<div class="sc '+m.cls+'">'
+      + '<div class="hd"><span class="nm">MA'+w+(w==182?'　原帖参数':'　备选参数')+'</span><span class="badge">'+m.label+'</span></div>'
+      + '<div class="act">'+m.act+'</div>'
+      + '<div class="rows">'
+      +   '<div><div class="k">买入触发价（=MA'+w+'）</div><div class="v">'+num(L['ma'+w],4)+'</div></div>'
+      +   '<div><div class="k">止盈触发价（×1.07）</div><div class="v">'+num(L['sell'+w],4)+'</div></div>'
+      +   '<div><div class="k">现价距止盈线</div><div class="v">'+pct(-L['dev_sell'+w])+'</div></div>'
+      + '</div>'
+      + '<div class="pos">'+posTxt+'</div>'
+      + '</div>';
+  }
+  document.getElementById('cards').innerHTML = card(182) + card(200);
+
+  /* 价格通道 rail */
+  (function(){
+    var dev = L.dev182, ma = L.ma182;
+    var lo = -1.2, hi = 8.2;
+    var x = Math.min(Math.max(dev*100, lo), hi);
+    var pB = (0-lo)/(hi-lo)*100, pH = (7-0)/(hi-lo)*100, pS = 100-pB-pH;
+    var pos = x>=0 ? pB + (Math.min(x,7)/7)*pH : (Math.max(x,lo)-lo)/(0-lo)*pB;
+    var up = L.ma182_slope || 0;
+    document.getElementById('rail').innerHTML =
+      '<div class="seg b" style="width:'+pB+'%">买入区</div>'
+      + '<div class="seg h" style="width:'+pH+'%">持有区（0 ~ +7%）</div>'
+      + '<div class="seg s" style="width:'+pS+'%">止盈区</div>'
+      + '<div class="mk" style="left:'+pos+'%;color:var(--tx)">现价 ' + sgn(dev) + '</div>';
+    document.getElementById('railNote').innerHTML =
+      '收盘价 ' + num(L.close,3) + ' 位于均线上方 ' + sgn(dev) + '；需回落至 ' + num(ma,4) + ' 以下才进入买入区，'
+      + '需涨至 ' + num(L.sell182,4) + ' 触发止盈。均线每日上移约 ' + (up>=0?'+':'') + num(up,5)
+      + ' 元／日（近20日均值），两条触发价会随均线缓慢抬升。';
+  })();
+
+  /* ---- SVG 图表工具 ---- */
+  function chart(w,h,pad,series,ranges,yFmt,colors,dash){
+    var W=w, H=h, P=pad;
+    var x0=P.l, x1=W-P.r, y0=P.t, y1=H-P.b;
+    var n = series[0].v.length;
+    var vmax = -1e9, vmin = 1e9;
+    series.forEach(function(s){ for(var i=0;i<n;i++){ var v=s.v[i]; if(v==null) continue;
+      if(v>vmax)vmax=v; if(v<vmin)vmin=v; } });
+    var padY=(vmax-vmin)*0.08; vmax+=padY; vmin-=padY;
+    var X = function(i){ return n<=1?x0:x0+(x1-x0)*i/(n-1); };
+    var Y = function(v){ return y1-(y1-y0)*(v-vmin)/(vmax-vmin); };
+    var s='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block">';
+    ranges.forEach(function(r){
+      var yy=Y(r);
+      s+='<line x1="'+x0+'" y1="'+yy.toFixed(1)+'" x2="'+x1+'" y2="'+yy.toFixed(1)+'" stroke="'+C_LINE+'"/>';
+      s+='<text x="'+(x0-8)+'" y="'+(yy+4).toFixed(1)+'" font-size="11" fill="'+C_TX3+'" text-anchor="end">'+yFmt(r)+'</text>';
+    });
+    /* x 轴年份 */
+    var lastx=-999, seen={};
+    for(var i=0;i<n;i++){
+      var y = series[0].d[i].slice(0,4);
+      if(seen[y]) continue; seen[y]=1;
+      if(X(i)-lastx<58) continue; lastx=X(i);
+      s+='<line x1="'+X(i).toFixed(1)+'" y1="'+y1+'" x2="'+X(i).toFixed(1)+'" y2="'+(y1+4)+'" stroke="'+C_LINE2+'"/>';
+      s+='<text x="'+X(i).toFixed(1)+'" y="'+(y1+17)+'" font-size="11" fill="'+C_TX3+'" text-anchor="middle">'+y+'</text>';
+    }
+    series.forEach(function(se,k){
+      var pts=[];
+      for(var i=0;i<n;i++){ if(se.v[i]==null) continue; pts.push(X(i).toFixed(1)+','+Y(se.v[i]).toFixed(1)); }
+      s+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="'+colors[k]+'" stroke-width="'+(se.w||1.6)+'"'
+        + (dash&&dash[k]?' stroke-dasharray="'+dash[k]+'"':'') + ' stroke-linejoin="round"/>';
+    });
+    return {svg:s, X:X, Y:Y, close:function(){ return s+'<line x1="'+x0+'" y1="'+y1+'" x2="'+x1+'" y2="'+y1+'" stroke="'+C_LINE2+'"/></svg>'; }};
+  }
+
+  function slice(arr, from){ return arr.slice(from); }
+
+  /* ---- 价格与信号图 ---- */
+  var curMa=182, curRg=730;
+  function drawPrice(){
+    var n = SER.date.length;
+    var from = curRg===0 ? D.start_index : Math.max(D.start_index, n-curRg);
+    var d = slice(SER.date, from), c = slice(SER.close, from);
+    var ma = slice(SER.ma[String(curMa)], from).map(function(v){ return v; });
+    var sell = ma.map(function(v){ return v==null?null:v*1.07; });
+    var ch = chart(1080,340,{l:70,r:26,t:22,b:40},
+      [{d:d,v:c},{d:d,v:ma},{d:d,v:sell}],
+      [0.6,0.8,1.0,1.2,1.4].filter(function(v){ return v>=Math.min.apply(null,c)*0.9 && v<=Math.max.apply(null,c)*1.1; }),
+      function(r){ return r.toFixed(1); },
+      [C_TX,C_ACC,C_GOLD],[null,null,'4 3']);
+    var idx={}; for(var i=0;i<d.length;i++) idx[d[i]]=i;
+    var marks='';
+    (D.trades[String(curMa)]||[]).forEach(function(t){
+      if(idx[t.buy_date]!=null){ var i=idx[t.buy_date];
+        marks+='<circle cx="'+ch.X(i).toFixed(1)+'" cy="'+ch.Y(c[i]).toFixed(1)+'" r="4.5" fill="'+C_UP+'" stroke="'+C_PANEL+'" stroke-width="1.2"/>'; }
+      if(t.sell_date && idx[t.sell_date]!=null){ var j=idx[t.sell_date];
+        marks+='<circle cx="'+ch.X(j).toFixed(1)+'" cy="'+ch.Y(c[j]).toFixed(1)+'" r="4.5" fill="'+C_DN+'" stroke="'+C_PANEL+'" stroke-width="1.2"/>'; }
+    });
+    document.getElementById('priceChart').innerHTML = ch.close().replace('</svg>', marks+'</svg>');
+    document.getElementById('priceLegend').innerHTML =
+      '<span><i style="background:'+C_TX+'"></i>收盘价（份额拆分已还原）</span>'
+      + '<span><i style="background:'+C_ACC+'"></i>MA'+curMa+'（买入触发线）</span>'
+      + '<span><i style="background:'+C_GOLD+'"></i>止盈线 = MA'+curMa+'×1.07</span>'
+      + '<span><span class="dot" style="background:'+C_UP+'"></span>买入</span>'
+      + '<span><span class="dot" style="background:'+C_DN+'"></span>卖出</span>';
+  }
+
+  /* ---- 净值图 ---- */
+  function drawEq(){
+    var n = SER.date.length;
+    var d = slice(SER.date, D.start_index), hold = slice(D.equity.hold, D.start_index);
+    var e182 = slice(D.equity.strat['182'], D.start_index), e200 = slice(D.equity.strat['200'], D.start_index);
+    var mx = Math.max(Math.max.apply(null,hold), Math.max.apply(null,e182), Math.max.apply(null,e200));
+    var rr=[], base=1; while(base<=mx){ rr.push(base); base+=0.5; }
+    var ch = chart(1080,330,{l:70,r:26,t:22,b:40},
+      [{d:d,v:e182,w:2.4},{d:d,v:e200,w:2},{d:d,v:hold,w:1.6}], rr,
+      function(r){ return r.toFixed(1)+'x'; },
+      [C_UP,C_GOLD,C_TX2],[null,null,'6 4']);
+    document.getElementById('eqChart').innerHTML = ch.close();
+    document.getElementById('eqLegend').innerHTML =
+      '<span><i style="background:'+C_UP+'"></i>策略 MA182　'+sgn(S['182'].total)+'（年化 '+pct(S['182'].cagr)+'，回撤 '+pct(S['182'].maxdd)+'）</span>'
+      + '<span><i style="background:'+C_GOLD+'"></i>策略 MA200　'+sgn(S['200'].total)+'（年化 '+pct(S['200'].cagr)+'，回撤 '+pct(S['200'].maxdd)+'）</span>'
+      + '<span><i style="background:'+C_TX2+'"></i>买入持有 512890　'+sgn(S.hold.total)+'（年化 '+pct(S.hold.cagr)+'，回撤 '+pct(S.hold.maxdd)+'）</span>';
+    document.getElementById('eqNote').innerHTML =
+      '区间 ' + S['182'].from + ' ~ ' + D.meta.data_date + '（' + S['182'].years + ' 年）　'
+      + '夏普 MA182 ' + S['182'].sharpe + ' / MA200 ' + S['200'].sharpe + ' / 持有 ' + S.hold.sharpe
+      + '　｜　信号次日开盘成交，双边各计万二手续费，空仓期不计收益';
+  }
+
+  /* ---- 参数热力图 ---- */
+  function drawHeat(){
+    var H = D.heat;
+    if(!H){ document.getElementById('heat').innerHTML = '<div class="empty">暂无热力图数据</div>'; return; }
+    var W = 1080, rows = H.k.length, cols = H.ma.length;
+    var gx = 54, gy = 18, cw = (W - gx - 10) / cols, chh = 20;
+    var Hh = gy + rows * chh + 8;
+    var flat = [];
+    for(var j = 0; j < rows; j++) for(var i = 0; i < cols; i++) flat.push(H.grid[j][i]);
+    var vmin = Math.min.apply(null, flat), vmax = Math.max.apply(null, flat);
+    /* 深色底上的色阶：低 = 近底色的深暗红，高 = 亮红橙（越亮 = 年化越高，与红涨口径一致）。
+       原浅色版是"米白 → 深红"，在深底上深红会糊成一片，故整条色阶重设。 */
+    var A = [46,22,26], B = [150,50,50], C = [255,120,96];
+    function mix(p, q, t){ return 'rgb(' + p.map(function(x, i){ return Math.round(x + (q[i] - x) * t); }).join(',') + ')'; }
+    function color(v){
+      var t = (v - vmin) / ((vmax - vmin) || 1);
+      return t < 0.5 ? mix(A, B, t * 2) : mix(B, C, (t - 0.5) * 2);
+    }
+    var s = '<svg viewBox="0 0 ' + W + ' ' + Hh + '" width="100%" style="display:block;font-family:inherit">';
+    for(var j2 = 0; j2 < rows; j2++)
+      s += '<text x="' + (gx - 6) + '" y="' + (gy + j2 * chh + chh / 2 + 4) + '" font-size="11" fill="' + C_TX3 + '" text-anchor="end">+'
+        + Math.round(H.k[j2] * 100 - 100) + '%</text>';
+    for(var i2 = 0; i2 < cols; i2++)
+      if(H.ma[i2] % 20 === 10 || H.ma[i2] === 320)
+        s += '<text x="' + (gx + i2 * cw + cw / 2).toFixed(1) + '" y="' + (gy - 5) + '" font-size="11" fill="' + C_TX3 + '" text-anchor="middle">' + H.ma[i2] + '</text>';
+    for(var j3 = 0; j3 < rows; j3++)
+      for(var i3 = 0; i3 < cols; i3++){
+        var v = H.grid[j3][i3];
+        s += '<rect x="' + (gx + i3 * cw).toFixed(1) + '" y="' + (gy + j3 * chh) + '" width="' + (cw - 1).toFixed(1)
+          + '" height="' + (chh - 1) + '" fill="' + color(v) + '"><title>均线 ' + H.ma[i3] + ' 日 / 偏离 +'
+          + Math.round(H.k[j3] * 100 - 100) + '% → 年化 ' + (v * 100).toFixed(2) + '%</title></rect>';
+      }
+    var iMa = {}, iK = {};
+    H.ma.forEach(function(m, i){ iMa[m] = i; });
+    H.k.forEach(function(k, j){ iK[k] = j; });
+    [[182, 1.07, '原帖参数'], [200, 1.07, '备选参数']].forEach(function(mk){
+      if(iMa[mk[0]] == null || iK[mk[1]] == null) return;
+      var cx = gx + iMa[mk[0]] * cw + cw / 2, cy = gy + iK[mk[1]] * chh + chh / 2;
+      s += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy + '" r="7.5" fill="none" stroke="' + C_TX + '" stroke-width="2.4"/>'
+        + '<circle cx="' + cx.toFixed(1) + '" cy="' + cy + '" r="7.5" fill="none" stroke="' + C_PANEL + '" stroke-width="1.1"/>';
+    });
+    var bi = 0, bj = 0;
+    for(var j4 = 0; j4 < rows; j4++) for(var i4 = 0; i4 < cols; i4++)
+      if(H.grid[j4][i4] > H.grid[bj][bi]){ bj = j4; bi = i4; }
+    var bx = gx + bi * cw + cw / 2, by = gy + bj * chh + chh / 2;
+    s += '<circle cx="' + bx.toFixed(1) + '" cy="' + by + '" r="3.4" fill="' + C_TX + '" stroke="' + C_PANEL + '" stroke-width="1.2"/>';
+    document.getElementById('heat').innerHTML = s + '</svg>';
+    document.getElementById('heatLegend').innerHTML =
+      '<span>年化收益 ' + (vmin * 100).toFixed(1) + '%</span>'
+      + '<span style="display:inline-block;width:200px;height:10px;border-radius:3px;background:linear-gradient(90deg,'
+      + color(vmin) + ',' + color((vmin + vmax) / 2) + ',' + color(vmax) + ')"></span>'
+      + '<span>' + (vmax * 100).toFixed(1) + '%</span>'
+      + '<span><span style="display:inline-block;width:11px;height:11px;border-radius:50%;border:2px solid var(--tx);vertical-align:middle;margin-right:4px"></span>圈出 = 182日/7%（原帖）与 200日/7%（备选）</span>'
+      + '<span><span class="dot" style="background:var(--tx);border:1px solid var(--line2)"></span>亮点 = 全网格最优点</span>';
+    document.getElementById('heatNote').innerHTML =
+      '横轴 = 均线周期（150–320 日），纵轴 = 卖出偏离（均线 × (1+偏离)）。每格为该组合的<b>样本内</b>年化收益 '
+      + '（信号次日开盘成交、双边万二、满仓/空仓二态）。鼠标悬停可看具体数值。<br>'
+      + '<b>怎么读</b>：① 纵向看——同一根均线，把止盈偏离放宽能提收益（均线越长，需要的偏离越宽）；'
+      + '② 横向看——<b>均线超过 204 日后，无论偏离怎么调，收益都掉一档</b>（固定 7% 口径下从 20% 掉到 14%）；'
+      + '③ 左下最亮的一片（150–200 日 × 偏离 6–10%）是稳健区——<b>色越亮 = 年化越高</b>，右上角没有"既能长均线又能高收益"的组合。<br>'
+      + '<b>口径提示</b>：偏离分辨率 1%，200 日在 0.5% 分辨率下的最优是 7.5%（年化 20.34%）。'
+      + '全网格最优点 ' + H.ma[bi] + ' 日 / 偏离 +' + Math.round(H.k[bj] * 100 - 100) + '%（年化 ' + (H.grid[bj][bi] * 100).toFixed(2)
+      + '%）属样本内极值，别直接采用。';
+    var pick = [150, 160, 170, 180, 182, 190, 200, 210, 220, 230, 240, 250, 260, 280, 300, 320];
+    document.getElementById('heatTable').innerHTML = pick.map(function(m){
+      var b = null;
+      for(var q = 0; q < H.best.length; q++) if(H.best[q].ma === m) b = H.best[q];
+      if(!b) return '';
+      var v107 = H.cagr_at_107[String(m)];
+      return '<tr' + (m === 182 ? ' class="hl"' : '') + '><td><b>' + m + '</b> 日</td>'
+        + '<td class="num">+' + Math.round(b.k * 100 - 100) + '%</td>'
+        + '<td class="num" style="color:var(--up);font-weight:500">' + (b.cagr * 100).toFixed(2) + '%</td>'
+        + '<td class="num">' + (v107 * 100).toFixed(2) + '%</td>'
+        + '<td class="num" style="color:var(--up)">+' + ((b.cagr - v107) * 100).toFixed(1) + 'pp</td></tr>';
+    }).join('');
+  }
+
+  /* ---- 调仓记录 ---- */
+  var curT = 182;
+  function drawTrades(){
+    var ts = (D.trades[String(curT)]||[]).slice().reverse();
+    if(!ts.length){ document.getElementById('trades').innerHTML='<div class="empty">暂无成交记录</div>'; return; }
+    var rows = ts.map(function(t, i){
+      var open = !t.sell_date;
+      var col = t.ret>=0?'var(--up)':'var(--dn)';
+      return '<tr><td>'+(ts.length-i)+'</td><td>'+t.buy_date+'</td><td class="num">'+num(t.buy_px,4)+'</td>'
+        + '<td>'+(open?'<span style="color:var(--accent-l);font-weight:500">持有中</span>':t.sell_date)+'</td>'
+        + '<td class="num">'+(open?'—':num(t.sell_px,4))+'</td>'
+        + '<td class="num" style="color:'+col+';font-weight:500">'+(open?sgn(t.ret)+'（浮盈）':sgn(t.ret))+'</td>'
+        + '<td class="num">'+t.days+'</td></tr>';
+    }).join('');
+    var win = ts.filter(function(t){return t.ret>0;}).length;
+    document.getElementById('trades').innerHTML =
+      '<table><thead><tr><th>#</th><th>买入日</th><th class="num">买入价</th><th>卖出日</th>'
+      + '<th class="num">卖出价</th><th class="num">收益率</th><th class="num">持有天数</th></tr></thead><tbody>'
+      + rows + '</tbody></table>'
+      + '<div class="small" style="padding:10px 18px 14px">合计 ' + ts.length + ' 笔，盈利 ' + win + ' 笔，'
+      + '平均持有 ' + Math.round(ts.reduce(function(a,b){return a+b.days;},0)/ts.length) + ' 天，'
+      + '平均单笔 ' + sgn(ts.reduce(function(a,b){return a+b.ret;},0)/ts.length) + '</div>';
+  }
+
+  /* ---- 说明 ---- */
+  document.getElementById('notes').innerHTML =
+    '<b>策略规则</b><ul>'
+    + '<li>买入：收盘价 <b>低于</b> N 日均线，且中证红利低波动指数 PE &lt; 20（当前中证红利 PE '
+    + (D.pe?Number(D.pe).toFixed(2):'—') + '，该条件长期不构成约束）</li>'
+    + '<li>卖出：收盘价 <b>高于</b> N 日均线 × 1.07（止盈）</li>'
+    + '<li>执行：信号当日收盘确认，<b>次日开盘</b>成交；仓位为满仓／空仓二态，持仓期不加不减</li>'
+    + '<li>参数：原帖为 N=182；本页同时给出 N=200 供对照</li></ul>'
+    + '<b>数据口径</b><ul>'
+    + '<li>' + D.meta.split + '</li>'
+    + '<li>价格序列为<b>不复权原始价 + 2021-10-22 份额拆分（1:2）还原</b>，等于投资者真实复权收益序列；'
+    + '腾讯／东财的"前复权"接口存在三位小数舍入，故未直接使用</li>'
+    + '<li>交易日 ' + D.meta.bars + ' 根（' + D.meta.first_date + ' 起），策略自 '
+    + S['182'].from + ' 起可计算（均线预热期）</li></ul>'
+    + '<b>已知局限</b><ul>'
+    + '<li>本页展示的是<b>规则回测的模拟跟踪</b>，不含你的实际持仓、费率差异与资金安排</li>'
+    + '<li>样本仅 ' + S['182'].years + ' 年、单标的，且均线参数为样本内挑选，存在过拟合风险；'
+    + '回测显示 N≥250 后策略迅速失效</li>'
+    + '<li>规则要求价格回落到均线下方才重新买入，<b>大牛市会卖飞踏空</b>，卖出后可能长期空仓</li>'
+    + '<li>若市场结构变化（红利资产持续单边上行），该均值回归型规则可能失效</li></ul>';
+
+  /* ---- 交互 ---- */
+  function bind(sel, attr, fn){
+    document.querySelectorAll(sel).forEach(function(b){
+      b.addEventListener('click', function(){
+        document.querySelectorAll(sel).forEach(function(x){ x.classList.remove('on'); });
+        b.classList.add('on'); fn(b.getAttribute(attr));
+      });
+    });
+  }
+  bind('[data-ma]','data-ma',function(v){ curMa=Number(v); drawPrice(); });
+  bind('[data-rg]','data-rg',function(v){ curRg=Number(v); drawPrice(); });
+  bind('[data-tma]','data-tma',function(v){ curT=Number(v); drawTrades(); });
+
+  drawPrice(); drawEq(); drawHeat(); drawTrades();
+})();
+</script>
+<script src="https://qt.gtimg.cn/q=sh512890" charset="GBK" onload="window.__live&&window.__live()"></script>
+</body>
+</html>
