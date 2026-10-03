@@ -215,7 +215,7 @@ code{background:var(--panel2);border:1px solid var(--line2);border-radius:4px;pa
   var kpis = [
     ['最新收盘', num(L.close,3), D.meta.data_date + '　' + (L.chg_pct>=0?'▲':'▼') + ' ' + pct(Math.abs(L.chg_pct))],
     ['MA182', num(L.ma182,4), '20日变动 ' + (L.ma182_chg20>=0?'+':'') + num(L.ma182_chg20,4)],
-    ['止盈线 MA182×1.07', num(L.sell182,4), '现价需再涨 ' + pct(-L.dev_sell182)],
+    ['止盈线 MA182×1.07', num(L.sell182,4), '现价需再涨 ' + pct(L.sell182 / L.close - 1)],
     ['MA200', num(L.ma200,4), '20日变动 ' + (L.ma200_chg20>=0?'+':'') + num(L.ma200_chg20,4)],
     ['现价偏离 MA182', sgn(L.dev182), '买入触发价 ' + num(L.ma182,4)],
     ['中证红利 PE', D.pe?Number(D.pe).toFixed(2):'—', 'PE&lt;20 条件未构成约束']
@@ -237,7 +237,7 @@ code{background:var(--panel2);border:1px solid var(--line2);border-radius:4px;pa
       + '<div class="rows">'
       +   '<div><div class="k">买入触发价（=MA'+w+'）</div><div class="v">'+num(L['ma'+w],4)+'</div></div>'
       +   '<div><div class="k">止盈触发价（×1.07）</div><div class="v">'+num(L['sell'+w],4)+'</div></div>'
-      +   '<div><div class="k">现价距止盈线</div><div class="v">'+pct(-L['dev_sell'+w])+'</div></div>'
+      +   '<div><div class="k">现价距止盈线</div><div class="v">'+pct(L['sell'+w] / L.close - 1)+'</div></div>'
       + '</div>'
       + '<div class="pos">'+posTxt+'</div>'
       + '</div>';
@@ -375,7 +375,9 @@ code{background:var(--panel2);border:1px solid var(--line2);border-radius:4px;pa
       s += '<text x="' + (gx - 6) + '" y="' + (gy + j2 * chh + chh / 2 + 4) + '" font-size="11" fill="' + C_TX3 + '" text-anchor="end">+'
         + Math.round(H.k[j2] * 100 - 100) + '%</text>';
     for(var i2 = 0; i2 < cols; i2++)
-      if(H.ma[i2] % 20 === 10 || H.ma[i2] === 320)
+      /* 刻度：每 20 日一个（%20===10 命中 150/170/…/310），右端 320 单列；
+         另**必须**补标 182 与 200 —— 它们是本页高亮圆圈圈出的两个主角参数（182%20=2、200%20=0，原条件会漏掉）。 */
+      if(H.ma[i2] % 20 === 10 || H.ma[i2] === 182 || H.ma[i2] === 200 || H.ma[i2] === 320)
         s += '<text x="' + (gx + i2 * cw + cw / 2).toFixed(1) + '" y="' + (gy - 5) + '" font-size="11" fill="' + C_TX3 + '" text-anchor="middle">' + H.ma[i2] + '</text>';
     for(var j3 = 0; j3 < rows; j3++)
       for(var i3 = 0; i3 < cols; i3++){

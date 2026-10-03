@@ -784,12 +784,23 @@ function detailHtml(rec,d,w){
   </div>`;
 }
 
-/* ── 阶段 / 策略信号变化检测（localStorage 持久化） ── */
+/* ── 阶段 / 策略信号变化检测（localStorage 持久化） ──
+   两个坑（2026-10-03 全站排查中复现，勿改回）：
+   ① 启动顺序是「同步 render() → 异步 loadAll()」（见文件末尾）。首屏 render 时 rows 还是空数组，
+      若照常写回基线，nSt / nSg 都是 {}，会把上一会话留下的基线无条件覆盖成 {}；
+      等数据回来再 render 时已无从比较 → 跨会话变化检测永久失效。故此处必须早退。
+   ② 基线键名必须带上 ATR 口径。两种口径的 MACD-V 绝对差 2%~8%（本页说明自述），
+      若共用一份基线，单单切一下口径就会刷出一批假的「信号变化」，还会把新口径结果写回旧基准。
+      分桶后「切口径」= 换一份基线，不产生变化条目。 */
 const LS_STAGE='macdv_stage_v1', LS_SIG='macdv_sig_v1';
+const lsKey=base=>base+'_'+atrMode;
+/* 旧版本用的是不带口径的键名，分桶后它们再也不会被读到，顺手清掉免得在 localStorage 里留垃圾 */
+try{ localStorage.removeItem(LS_STAGE); localStorage.removeItem(LS_SIG); }catch(e){}
 function collectChanges(rows){
+  if(!rows || !rows.length) return {st:[],sg:[]};      // 见上 ①：数据没到就别碰基线
   let pSt={},pSg={};
-  try{ pSt=JSON.parse(localStorage.getItem(LS_STAGE)||'{}'); }catch(e){}
-  try{ pSg=JSON.parse(localStorage.getItem(LS_SIG)||'{}'); }catch(e){}
+  try{ pSt=JSON.parse(localStorage.getItem(lsKey(LS_STAGE))||'{}'); }catch(e){}
+  try{ pSg=JSON.parse(localStorage.getItem(lsKey(LS_SIG))||'{}'); }catch(e){}
   const st=[], sg=[], nSt={}, nSg={};
   rows.forEach(r=>{
     [['day',r.d],['week',r.w]].forEach(([p,rd])=>{
@@ -803,8 +814,8 @@ function collectChanges(rows){
         sg.push({name:r.rec.name,p,from:pSg[key],to:gk});
     });
   });
-  try{ localStorage.setItem(LS_STAGE,JSON.stringify(nSt)); }catch(e){}
-  try{ localStorage.setItem(LS_SIG,JSON.stringify(nSg)); }catch(e){}
+  try{ localStorage.setItem(lsKey(LS_STAGE),JSON.stringify(nSt)); }catch(e){}
+  try{ localStorage.setItem(lsKey(LS_SIG),JSON.stringify(nSg)); }catch(e){}
   return {st,sg};
 }
 function bandVal(k){ return k==='ob'?160:k==='up'?100:k==='mid'?0:k==='dn'?-100:-160; }

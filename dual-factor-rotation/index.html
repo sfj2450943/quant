@@ -187,6 +187,17 @@
   .rb-detail{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--tx2);line-height:1.7;}
   .rb-sub{color:var(--gold);font-weight:700;margin:6px 0 2px;}
 
+  /* 参数行必须在 ~1100px 以下就允许换行。
+     .nav-params 是 flex-wrap:nowrap + 子项 flex-shrink:0，最小内容宽 985px（5×125 + 5×12 间隙 + .nav-seg 300），
+     加 .card-body 左右各 20px → 需要约 1025px 可用宽度；而外层 .card 是 overflow:hidden，
+     于是 761~1100px 这段视口会直接把右侧的「对比基准」与「自动/手动」切换裁掉，够不到也点不了。
+     实测（_shots/navprobe-*.png）：视口 900px 溢出 185px、1024px 仍溢出 45px。 */
+  @media(max-width:1100px){
+    .nav-params{flex-wrap:wrap;}
+    .nav-params label{width:calc(25% - 9px);}
+    .nav-seg{width:100%;margin-left:0;}
+  }
+
   @media(max-width:760px){
     body{padding:10px;}
     header h1{font-size:18px;}
@@ -825,7 +836,13 @@ async function fetchAll(){
       snapCnt++;
     }else{
       const ex = EXAMPLE[e.code];               // 连快照也没有 → 回退示例数据(假)
-      if(ex){ e.price=ex.price; e.adjClose=ex.price; e.ma20=ex.ma20; e.vol60=ex.vol60; e.valid=true; e.live=false; e.snap=false; }
+      /* 示例兜底只提供 price / ma20 / vol60，其余因子必须一起补 0：
+         chg250 / chgDays 只在 computeFromKlines()（见上方 806-807）里赋值，走本条分支就会缺，
+         而 rowHTML() 会直接对 e.chg250 调 .toFixed(1) → TypeError 打断整张明细表渲染。
+         补 0 后 qualify=false，状态列显示「不达标」，与状态条「其余 N 只使用示例值」的提示一致。 */
+      if(ex){ e.price=ex.price; e.adjClose=ex.price; e.ma20=ex.ma20; e.vol60=ex.vol60;
+              e.chg250=0; e.chgDays=0;
+              e.valid=true; e.live=false; e.snap=false; }
       else { e.valid=false; e.live=false; }
     }
   });
@@ -2108,13 +2125,16 @@ async function renderNav(){
 function onNavParamChange(ev){
   const p=loadNavParams();
   const $=id=>document.getElementById(id);
-  if($('navStart')){
+  // 只有「起始日」输入框自身触发变更时才读写它（传 ev 的只有它，见 HTML 里 onchange="onNavParamChange(event)"）。
+  // 为什么必须守卫：renderNav() 会把自动锚点回填进输入框（见上方 p.start = NAV_ANCHOR_START 那几行），
+  // 于是改本金/间隔/佣金/基准/模式时，这里读到的 raw 是一个**真实日期**，
+  // nd 非空 → p.userStartSet=true → 自动锚点被固化成"用户显式设置"，
+  // 写进 localStorage 后还会随云同步跨设备传播；此后策略锚点更新也不再生效。
+  if(ev && ev.target && ev.target.id==='navStart' && $('navStart')){
     const raw=$('navStart').value;
     const nd=normalizeDate(raw);                   // type=date 返回 YYYY-MM-DD，必须规范化
     if(nd){ p.start=nd; p.userStartSet=true; }
     else if(!raw){ p.start='__AUTO__'; p.userStartSet=false; }   // 清空输入框 = 恢复默认锚点
-    // 仅当用户真正改了「起始日」输入框时，才尊重其输入（避免旧持久化值制造大量历史回测）
-    if(ev && ev.target && ev.target.id==='navStart') window.__navStartExplicit=true;
   }
   // 参数护栏：非法值一律忽略并保留原值，避免死循环（rebal<1）、净值失真（capital<0）、凭空生钱（comm<0）
   if($('navCapital')){
