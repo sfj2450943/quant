@@ -209,13 +209,17 @@ def build():
         latest[f"ma{w}_chg20"] = round(ma_now[w] - ma_series[w][last_i - 20], 4)
         latest[f"ma{w}_slope"] = round((ma_now[w] - ma_series[w][last_i - 20]) / 20, 5)
         # 判定顺序要点（勿改回）：
-        #   ① 止盈必须最先判 —— 「持仓」与「站上止盈线」在止盈出场当天同时成立，
-        #      先判持仓会让每一次止盈出场都写着「继续持有」（历史重放命中 12/11 笔，与 trades 平仓笔数一致）。
-        #   ② 持仓期只有止盈一个出口（跌破均线不卖，策略为满仓/空仓二态、持仓期不加不减）。
+        #   ① 止盈必须**最先**判，且**不能**塞进 holding 分支里 ——
+        #      止盈出场当天「持仓」与「站上止盈线」同时成立，只要把 holding 放在最前面，
+        #      每一次止盈出场都会被写成「继续持有」（历史重放命中 12/11 笔，与 trades 平仓笔数完全一致）。
+        #   ② 持仓期只有止盈一个出口（跌破均线不卖：策略是满仓/空仓二态，持仓期不加不减）。
         #   ③ 空仓期只有「跌破均线」一个入口；空仓而价在均线上方（含站上止盈线）一律归「观望」，
         #      否则会出现「报止盈信号、卡片正文却写空仓」的自相矛盾（历史 385/447 天）。
-        if sims[w]["holding"]:
-            latest[f"state{w}"] = "sell" if close[last_i] > ma_now[w] * K else "hold"
+        if close[last_i] > ma_now[w] * K:
+            # 站上止盈线：持仓中 = 次日开盘清仓；空仓则只是没搭上车的强势日，归观望
+            latest[f"state{w}"] = "sell" if sims[w]["holding"] else "wait"
+        elif sims[w]["holding"]:
+            latest[f"state{w}"] = "hold"
         elif close[last_i] < ma_now[w]:
             latest[f"state{w}"] = "buy"
         else:
