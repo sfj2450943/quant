@@ -175,13 +175,38 @@ code{background:var(--panel2);border:1px solid var(--line2);border-radius:4px;pa
 <script>
 (function(){
   var D = window.HL_DATA;
-  if(!D){ document.getElementById('cards').innerHTML='<div class="empty">data.js 未加载，请先运行 update_data.py</div>'; return; }
-  /* 手写 SVG 的 fill/stroke 不认 CSS 变量 → 统一从 theme.css 的 token 读真值再用。
-     集中取一次，避免每处字符串拼接都写一遍 getComputedStyle。 */
-  var QC = function(n){ return getComputedStyle(document.documentElement).getPropertyValue('--'+n).trim(); };
+  var msg = function(t){ var el=document.getElementById('cards'); if(el) el.innerHTML='<div class="empty">'+t+'</div>'; };
+
+  /* ── ① 数据守卫（2026-10-04 补强）──
+     原先只判断 `if(!D)`，而 `D.xxx || []` 那种写法只防「键存在但值为空」、防不了「键不存在」。
+     下游 latest / stats / series / trades / pos 全是直接取用，缺任何一个都是整页白屏且**不报错**，
+     排查时很容易误以为是数据源问题。这里把关键结构一次性校验完，缺什么就明说。 */
+  if(!D){ msg('data.js 未加载 —— 请先在本目录运行 update_data.py'); return; }
+  var miss = ['meta','latest','stats','series','trades','pos','heat'].filter(function(k){ return !D[k]; });
+  if(!miss.length){
+    ['close','ma182','ma200','sell182','sell200','state182','state200'].forEach(function(k){
+      if(D.latest[k] == null) miss.push('latest.'+k);
+    });
+    ['182','200'].forEach(function(w){ if(!D.series.ma || !D.series.ma[w]) miss.push('series.ma["'+w+'"]'); });
+  }
+  if(miss.length){ msg('data.js 结构不完整，缺少：' + miss.join('、') + ' —— 请重新运行 update_data.py'); return; }
+
+  /* ── ② 取色工具 + 兜底 ──
+     手写 SVG 的 fill/stroke 不认 CSS 变量 → 统一从 theme.css 的 token 读真值再用，集中取一次。
+     兜底必要性：theme.css 若没加载成功（离线 / 路径改错 / 被拦），getPropertyValue 返回**空串**，
+     拼出来就是 stroke="" —— 所有折线会**静默消失且不报错**，排查方向会被带偏到数据侧。 */
+  var FALLBACK = {tx:'#e6edf3',tx2:'#9aa7b6',tx3:'#6b7889',line:'#252d38',line2:'#323c4a',
+                  panel:'#151b23',up:'#ff4d4f',dn:'#1ec77d','accent-l':'#4d8bff',gold:'#f0a020'};
+  var cssOk = true;
+  var QC = function(n){
+    var v = getComputedStyle(document.documentElement).getPropertyValue('--'+n).trim();
+    if(!v){ cssOk = false; v = FALLBACK[n] || '#888888'; }
+    return v;
+  };
   var C_TX=QC('tx'), C_TX2=QC('tx2'), C_TX3=QC('tx3'), C_LINE=QC('line'), C_LINE2=QC('line2'),
       C_PANEL=QC('panel'), C_UP=QC('up'), C_DN=QC('dn'),
       C_ACC=QC('accent-l'), C_GOLD=QC('gold');
+  if(!cssOk) console.warn('[hongli-monitor] theme.css 未生效（token 取到空值），已启用内置兜底配色。请检查 ../theme.css 是否能正常加载。');
   var L = D.latest, S = D.stats, SER = D.series;
   var pct = function(x,d){ d = d==null?2:d; return (x*100).toFixed(d)+'%'; };
   var sgn = function(x,d){ d = d==null?2:d; return (x>=0?'+':'')+(x*100).toFixed(d)+'%'; };
@@ -250,7 +275,14 @@ code{background:var(--panel2);border:1px solid var(--line2);border-radius:4px;pa
     var lo = -1.2, hi = 8.2;
     var x = Math.min(Math.max(dev*100, lo), hi);
     var pB = (0-lo)/(hi-lo)*100, pH = (7-0)/(hi-lo)*100, pS = 100-pB-pH;
-    var pos = x>=0 ? pB + (Math.min(x,7)/7)*pH : (Math.max(x,lo)-lo)/(0-lo)*pB;
+    /* 三段各按自己区间线性映射。
+       原写法是 `pB + (Math.min(x,7)/7)*pH` —— x>7 时被 Math.min 夹死在 7，
+       于是一旦偏离 ≥7%，游标永远钉在「持有区右端 = 止盈区左边界」不动，
+       偏离 +7% 与 +12% 画出来一模一样，`hi=8.2` 的上限也永不体现。
+       现在把 [7, hi] 线性铺进止盈区，超过 hi 才贴右端。 */
+    var pos = x < 0 ? (Math.max(x,lo)-lo)/(0-lo)*pB
+            : x <= 7 ? pB + (x/7)*pH
+            : Math.min(pB + pH + ((x-7)/(hi-7))*pS, 100);
     var up = L.ma182_slope || 0;
     document.getElementById('rail').innerHTML =
       '<div class="seg b" style="width:'+pB+'%">买入区</div>'
@@ -359,14 +391,22 @@ code{background:var(--panel2);border:1px solid var(--line2);border-radius:4px;pa
     var W = 1080, rows = H.k.length, cols = H.ma.length;
     var gx = 54, gy = 18, cw = (W - gx - 10) / cols, chh = 20;
     var Hh = gy + rows * chh + 8;
+    /* 只统计有限数值：Math.min.apply(null, flat) 会把 null 当 0、遇 undefined 直接得 NaN，
+       一旦出现空值整条色阶就废掉（rgb(NaN,…) 是无效色，浏览器会静默丢弃该 fill）。 */
     var flat = [];
-    for(var j = 0; j < rows; j++) for(var i = 0; i < cols; i++) flat.push(H.grid[j][i]);
-    var vmin = Math.min.apply(null, flat), vmax = Math.max.apply(null, flat);
+    for(var j = 0; j < rows; j++) for(var i = 0; i < cols; i++){
+      var gv = H.grid[j][i];
+      if(typeof gv === 'number' && isFinite(gv)) flat.push(gv);
+    }
+    var vmin = flat.length ? Math.min.apply(null, flat) : 0;
+    var vmax = flat.length ? Math.max.apply(null, flat) : 1;
+    var isNum = function(v){ return typeof v === 'number' && isFinite(v); };
     /* 深色底上的色阶：低 = 近底色的深暗红，高 = 亮红橙（越亮 = 年化越高，与红涨口径一致）。
        原浅色版是"米白 → 深红"，在深底上深红会糊成一片，故整条色阶重设。 */
     var A = [46,22,26], B = [150,50,50], C = [255,120,96];
     function mix(p, q, t){ return 'rgb(' + p.map(function(x, i){ return Math.round(x + (q[i] - x) * t); }).join(',') + ')'; }
     function color(v){
+      if(!isNum(v)) return 'rgba(0,0,0,0)';          // 空值 → 透明格，不污染色阶
       var t = (v - vmin) / ((vmax - vmin) || 1);
       return t < 0.5 ? mix(A, B, t * 2) : mix(B, C, (t - 0.5) * 2);
     }
@@ -384,7 +424,7 @@ code{background:var(--panel2);border:1px solid var(--line2);border-radius:4px;pa
         var v = H.grid[j3][i3];
         s += '<rect x="' + (gx + i3 * cw).toFixed(1) + '" y="' + (gy + j3 * chh) + '" width="' + (cw - 1).toFixed(1)
           + '" height="' + (chh - 1) + '" fill="' + color(v) + '"><title>均线 ' + H.ma[i3] + ' 日 / 偏离 +'
-          + Math.round(H.k[j3] * 100 - 100) + '% → 年化 ' + (v * 100).toFixed(2) + '%</title></rect>';
+          + Math.round(H.k[j3] * 100 - 100) + '% → 年化 ' + (isNum(v) ? (v * 100).toFixed(2) + '%' : '—') + '</title></rect>';
       }
     var iMa = {}, iK = {};
     H.ma.forEach(function(m, i){ iMa[m] = i; });
@@ -395,11 +435,17 @@ code{background:var(--panel2);border:1px solid var(--line2);border-radius:4px;pa
       s += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy + '" r="7.5" fill="none" stroke="' + C_TX + '" stroke-width="2.4"/>'
         + '<circle cx="' + cx.toFixed(1) + '" cy="' + cy + '" r="7.5" fill="none" stroke="' + C_PANEL + '" stroke-width="1.1"/>';
     });
-    var bi = 0, bj = 0;
-    for(var j4 = 0; j4 < rows; j4++) for(var i4 = 0; i4 < cols; i4++)
-      if(H.grid[j4][i4] > H.grid[bj][bi]){ bj = j4; bi = i4; }
-    var bx = gx + bi * cw + cw / 2, by = gy + bj * chh + chh / 2;
-    s += '<circle cx="' + bx.toFixed(1) + '" cy="' + by + '" r="3.4" fill="' + C_TX + '" stroke="' + C_PANEL + '" stroke-width="1.2"/>';
+    // 全网格最优点：跳过空值，且不能用 grid[0][0] 当初始值（它本身可能是空）
+    var bi = 0, bj = 0, bv = -Infinity;
+    for(var j4 = 0; j4 < rows; j4++) for(var i4 = 0; i4 < cols; i4++){
+      var cv = H.grid[j4][i4];
+      if(isNum(cv) && cv > bv){ bv = cv; bj = j4; bi = i4; }
+    }
+    var hasBest = bv > -Infinity;
+    if(hasBest){
+      s += '<circle cx="' + (gx + bi * cw + cw / 2).toFixed(1) + '" cy="' + (gy + bj * chh + chh / 2)
+        + '" r="3.4" fill="' + C_TX + '" stroke="' + C_PANEL + '" stroke-width="1.2"/>';
+    }
     document.getElementById('heat').innerHTML = s + '</svg>';
     document.getElementById('heatLegend').innerHTML =
       '<span>年化收益 ' + (vmin * 100).toFixed(1) + '%</span>'
@@ -408,26 +454,47 @@ code{background:var(--panel2);border:1px solid var(--line2);border-radius:4px;pa
       + '<span>' + (vmax * 100).toFixed(1) + '%</span>'
       + '<span><span style="display:inline-block;width:11px;height:11px;border-radius:50%;border:2px solid var(--tx);vertical-align:middle;margin-right:4px"></span>圈出 = 182日/7%（原帖）与 200日/7%（备选）</span>'
       + '<span><span class="dot" style="background:var(--tx);border:1px solid var(--line2)"></span>亮点 = 全网格最优点</span>';
+    /* 说明里的数字一律当场从数据算 —— 写死的数字在数据更新后就开始说谎
+       （原先硬编码「超过 204 日后从 20% 掉到 14%」「200 日 0.5% 分辨率最优 7.5%/20.34%」，
+        而网格步长其实是 5，根本没有 204 这一列；0.5% 分辨率那份数据也不在 data.js 里）。 */
+    var cliff = null, s107 = H.ma.map(function(m){
+      return { m: m, v: H.cagr_at_107 ? H.cagr_at_107[String(m)] : null };
+    }).filter(function(o){ return isNum(o.v); });
+    for(var q1 = 1; q1 < s107.length; q1++){
+      var d1 = s107[q1 - 1].v - s107[q1].v;
+      if(!cliff || d1 > cliff.d) cliff = { d: d1, a: s107[q1 - 1], b: s107[q1] };
+    }
+    var b200 = null;
+    (H.best || []).forEach(function(o){ if(o.ma === 200) b200 = o; });
+    var rng = H.ma.length ? (H.ma[0] + '–' + H.ma[H.ma.length - 1] + ' 日') : '—';
+    var step = (H.k.length > 1 && isNum(H.k[1]) && isNum(H.k[0])) ? (H.k[1] - H.k[0]) * 100 : 1;
+    var bjTxt = hasBest ? ('全网格最优点 ' + H.ma[bi] + ' 日 / 偏离 +' + Math.round(H.k[bj] * 100 - 100)
+                         + '%（年化 ' + (bv * 100).toFixed(2) + '%）属样本内极值，别直接采用。') : '';
     document.getElementById('heatNote').innerHTML =
-      '横轴 = 均线周期（150–320 日），纵轴 = 卖出偏离（均线 × (1+偏离)）。每格为该组合的<b>样本内</b>年化收益 '
+      '横轴 = 均线周期（' + rng + '），纵轴 = 卖出偏离（均线 × (1+偏离)）。每格为该组合的<b>样本内</b>年化收益 '
       + '（信号次日开盘成交、双边万二、满仓/空仓二态）。鼠标悬停可看具体数值。<br>'
       + '<b>怎么读</b>：① 纵向看——同一根均线，把止盈偏离放宽能提收益（均线越长，需要的偏离越宽）；'
-      + '② 横向看——<b>均线超过 204 日后，无论偏离怎么调，收益都掉一档</b>（固定 7% 口径下从 20% 掉到 14%）；'
-      + '③ 左下最亮的一片（150–200 日 × 偏离 6–10%）是稳健区——<b>色越亮 = 年化越高</b>，右上角没有"既能长均线又能高收益"的组合。<br>'
-      + '<b>口径提示</b>：偏离分辨率 1%，200 日在 0.5% 分辨率下的最优是 7.5%（年化 20.34%）。'
-      + '全网格最优点 ' + H.ma[bi] + ' 日 / 偏离 +' + Math.round(H.k[bj] * 100 - 100) + '%（年化 ' + (H.grid[bj][bi] * 100).toFixed(2)
-      + '%）属样本内极值，别直接采用。';
+      + '② 横向看——' + (cliff
+          ? '<b>均线拉到 ' + cliff.b.m + ' 日之后，收益就掉一档</b>（固定 7% 口径下从 '
+            + (cliff.a.v * 100).toFixed(1) + '% 掉到 ' + (cliff.b.v * 100).toFixed(1) + '%）'
+          : '收益随均线周期变化')
+      + '；③ 左下最亮的一片是稳健区——<b>色越亮 = 年化越高</b>，右上角没有"既能长均线又能高收益"的组合。<br>'
+      + '<b>口径提示</b>：偏离分辨率 ' + step.toFixed(0) + '%，'
+      + (b200 ? '200 日在本分辨率下的最优是偏离 +' + Math.round(b200.k * 100 - 100)
+                + '%（年化 ' + (b200.cagr * 100).toFixed(2) + '%）。' : '')
+      + bjTxt;
     var pick = [150, 160, 170, 180, 182, 190, 200, 210, 220, 230, 240, 250, 260, 280, 300, 320];
     document.getElementById('heatTable').innerHTML = pick.map(function(m){
       var b = null;
       for(var q = 0; q < H.best.length; q++) if(H.best[q].ma === m) b = H.best[q];
-      if(!b) return '';
-      var v107 = H.cagr_at_107[String(m)];
+      if(!b || !isNum(b.cagr)) return '';
+      var v107 = H.cagr_at_107 ? H.cagr_at_107[String(m)] : null;
+      var has107 = isNum(v107);
       return '<tr' + (m === 182 ? ' class="hl"' : '') + '><td><b>' + m + '</b> 日</td>'
-        + '<td class="num">+' + Math.round(b.k * 100 - 100) + '%</td>'
+        + '<td class="num">' + (isNum(b.k) ? '+' + Math.round(b.k * 100 - 100) + '%' : '—') + '</td>'
         + '<td class="num" style="color:var(--up);font-weight:500">' + (b.cagr * 100).toFixed(2) + '%</td>'
-        + '<td class="num">' + (v107 * 100).toFixed(2) + '%</td>'
-        + '<td class="num" style="color:var(--up)">+' + ((b.cagr - v107) * 100).toFixed(1) + 'pp</td></tr>';
+        + '<td class="num">' + (has107 ? (v107 * 100).toFixed(2) + '%' : '—') + '</td>'
+        + '<td class="num" style="color:var(--up)">' + (has107 ? '+' + ((b.cagr - v107) * 100).toFixed(1) + 'pp' : '—') + '</td></tr>';
     }).join('');
   }
 

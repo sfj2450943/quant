@@ -54,9 +54,17 @@
     return (v >= 0 ? '+' : '') + v.toFixed(dp === undefined ? 2 : dp) + '%';
   }
 
+  /*
+   * 日期格式化：只放行「8 位数字」与「已格式化的 YYYY-MM-DD」两种形态，
+   * 其余一律降级为「—」。
+   * 旧实现 `return s || '—'` 会把非法串原样透传，而返回值会进 innerHTML
+   * （调仓表 588/591/598 行）与 ECharts tooltip 的 HTML → 未转义注入点。
+   */
   function fmtDate(s) {
-    if (!s || s.length !== 8) return s || '—';
-    return s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8);
+    var t = (s === null || s === undefined) ? '' : String(s);
+    if (/^\d{8}$/.test(t)) return t.slice(0, 4) + '-' + t.slice(4, 6) + '-' + t.slice(6, 8);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+    return '—';
   }
 
   /* ───────── 通用统计工具 ───────── */
@@ -570,6 +578,46 @@
     $('bhMDD').textContent = bh.maxDrawdown.toFixed(2) + '%';
   }
 
+  /* ───────── 页脚「组合方案说明 / 回测假设」里的业绩数字 ─────────
+   * 这些数字原先写死在 index.html 页脚里（累计 +227.99% 等），数据一更新就与
+   * 页面自算的 statTotal 对不上（实测差 0.81pp）。改为用同一套回测函数实时算，
+   * 口径随当前「Wind / 代理」切换，参数固定为页面出厂默认值（不受滑块影响）。
+   */
+  var FOOTER_CFG = {
+    def:     { buy: -1, sellUp: 8, sellDown: 5, capLo: 0.5, addUp: 0,   finRate: 6, costBps: 0  },
+    levNoFin:{ buy: -1, sellUp: 8, sellDown: 5, capLo: 0.5, addUp: 0.5, finRate: 0, costBps: 0  },
+    levFin:  { buy: -1, sellUp: 8, sellDown: 5, capLo: 0.5, addUp: 0.5, finRate: 6, costBps: 0  },
+    cost20:  { buy: -1, sellUp: 8, sellDown: 5, capLo: 0.5, addUp: 0,   finRate: 6, costBps: 20 }
+  };
+
+  function setTxt(id, s) { var el = $(id); if (el) el.textContent = s; }
+
+  function renderFooterStats() {
+    if (!DATA || !DATA.series) return;
+    var divNav = DATA.series.div_nav;
+    var sp = spreadArray();
+    var dates = DATA.series.dates;
+    if (!divNav || !sp || !dates || divNav.length !== sp.length) return;
+
+    var ma = maArray(sp, state.maWin);
+    var s0 = firstMaIdx(ma);
+    var def = comboBacktest(divNav, sp, ma, FOOTER_CFG.def, s0).stats;
+    var noFin = comboBacktest(divNav, sp, ma, FOOTER_CFG.levNoFin, s0).stats;
+    var withFin = comboBacktest(divNav, sp, ma, FOOTER_CFG.levFin, s0).stats;
+    var cost = comboBacktest(divNav, sp, ma, FOOTER_CFG.cost20, s0).stats;
+
+    var minPct = function (v) { return v.toFixed(2) + '%'; };
+
+    setTxt('ftSpan', fmtDate(dates[s0]) + ' ~ ' + fmtDate(dates[divNav.length - 1]));
+    setTxt('ftTotal', fmtPct(def.totalReturn, 2));
+    setTxt('ftAnnual', fmtPct(def.annualReturn, 2));
+    setTxt('ftMDD', minPct(def.maxDrawdown));
+    // 两组区间都按「含融资成本 ~ 不含融资成本」排列，与页脚括注一致
+    setTxt('ftLevTotal', fmtPct(withFin.totalReturn, 2) + ' ~ ' + fmtPct(noFin.totalReturn, 2));
+    setTxt('ftLevMDD', minPct(withFin.maxDrawdown) + ' ~ ' + minPct(noFin.maxDrawdown));
+    setTxt('ftCost', fmtPct(cost.totalReturn, 2));
+  }
+
   function renderTrades() {
     var dates = DATA.series.dates;
     var isCombo = state.engine === 'combo';
@@ -982,6 +1030,7 @@
 
     renderKPI();
     renderStats();
+    renderFooterStats();   // 紧跟 renderStats：页脚数字与 statTotal 同源同批更新
     renderTrades();
     renderAdvice();
     renderMainChart();
@@ -990,7 +1039,23 @@
 
   /* ───────── 交互 ───────── */
 
-  /* ───────── 交互 ───────── */
+  /*
+   * 滑块拖动属于高频输入：原先每次 input 都全量重算（3112 点 maArray + 回测，
+   * 再两张 ECharts 用 setOption(opt, true) 整图重建），一次拖动 = 几十次全量重算，
+   * 明显卡顿。这里改为 120ms 尾部去抖 —— 拖动过程中只由各滑块自己刷新数值标签，
+   * 停手后才重算一次。切口径 / 切引擎 / 点预设这些离散操作仍立即生效。
+   */
+  var _rcTimer = null;
+
+  function recomputeNow() {
+    if (_rcTimer) { clearTimeout(_rcTimer); _rcTimer = null; }
+    recompute();
+  }
+
+  function scheduleRecompute() {
+    if (_rcTimer) clearTimeout(_rcTimer);
+    _rcTimer = setTimeout(function () { _rcTimer = null; recompute(); }, 120);
+  }
 
   var COMBO_PRESETS = {
     P0: { buy: -1, sellUp: 5, sellDown: 5, capLo: 1.0, addUp: 0 },
@@ -1053,14 +1118,14 @@
         document.querySelectorAll('[data-mode]').forEach(function (x) {
           x.classList.toggle('active', x === el);
         });
-        recompute();
+        recomputeNow();
       });
     });
 
     document.querySelectorAll('[data-engine]').forEach(function (el) {
       el.addEventListener('click', function () {
         setEngine(el.getAttribute('data-engine'));
-        recompute();
+        recomputeNow();
       });
     });
 
@@ -1080,7 +1145,7 @@
       state.buyTh = v;
       $('buyVal').textContent = fmtPct(v, 1);
       markPresetActive();
-      recompute();
+      scheduleRecompute();
     });
 
     $('sellSlider').addEventListener('input', function () {
@@ -1089,7 +1154,7 @@
       state.sellTh = v;
       $('sellVal').textContent = fmtPct(v, 1);
       markPresetActive();
-      recompute();
+      scheduleRecompute();
     });
 
     document.querySelectorAll('[data-preset]').forEach(function (el) {
@@ -1105,7 +1170,7 @@
         document.querySelectorAll('[data-preset]').forEach(function (x) {
           x.classList.toggle('active', x === el);
         });
-        recompute();
+        recomputeNow();
       });
     });
 
@@ -1124,7 +1189,7 @@
         r[2](parseFloat(this.value));
         syncComboUI();
         markComboPresetActive();
-        recompute();
+        scheduleRecompute();
       });
     });
 
@@ -1140,7 +1205,7 @@
         state.combo.addUp = p.addUp;
         syncComboUI();
         markComboPresetActive();
-        recompute();
+        recomputeNow();
       });
     });
 

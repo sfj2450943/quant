@@ -1210,6 +1210,11 @@ let cloudReady=false;        // SDK 是否可用
 let cloudUser=null;          // 当前登录用户 {id,email}；null = 未登录
 let cloudAutoSync=false;     // 用户已选定同步方向后，才允许自动推送
 let cloudParamTimer=null, cloudRecTimer=null;
+/* 「本机见过」的云端版本快照：自动同步前拿它和云端现状比对，用来发现
+   「另一台设备在此期间写过」。#18 之前是纯 last-write-wins —— updated_at 只写不读，
+   两台设备先后编辑时后写整体覆盖先写，既无提示也无陈旧检测。 */
+let cloudRemoteStamp=null;     // nav_params.updated_at
+let cloudRemoteRecords=null;   // 登记日字符串数组
 let pendingEmailOtp=null;    // 取码后暂存 {email,verificationId,isExistingUser}，跨事件复用
 let pendingReset=null;       // 重置密码句柄 resetPasswordForEmail 的返回
 let cmResendTimer=null;
@@ -1233,17 +1238,23 @@ function initCloudClient(){
     cloudReady=true; return true;
   }catch(e){ cloudReady=false; return false; }
 }
-/* 云调用错误 → 人话。不吐原始报文、不吐 token。 */
+/* 云调用错误 → 人话。不吐原始报文、不吐 token。
+   判断顺序有讲究：**会话过期的响应同时也带着库层的 42501**（实测 401 DATABASE_42501），
+   若先落到「42501 → 权限不足」，就会把「该重新登录」误报成「权限配置有问题」，
+   排查方向直接被带偏。所以认证类信号必须在 PG 码之前判。 */
 function cloudErrMsg(error){
   if(!error) return '未知错误';
-  const code=error.code||'';
+  const code=error.code||'', kind=error.kind||'';
+  const status=Number(error.status||error.statusCode||0);
+  const msg=String(error.message||'');
+  const expired = kind==='unauthenticated' || kind==='invalid_grant' || kind==='authentication'
+    || status===401
+    || /MISSING_CREDENTIALS|jwt\s*(has\s*)?expired|invalid\s+(jwt|token|credentials)|not\s+authenticated/i.test(msg);
+  if(expired) return '登录已过期，请重新登录';
   if(code==='42P01') return '云端数据表缺失，请先初始化';
   if(code==='42501') return '云端拒绝了本次操作（权限不足）';
   if(code==='23505') return '云端已存在相同记录';
-  const kind=error.kind||'';
   if(kind==='network'||kind==='backend-unavailable') return '云端连接失败，请检查网络后重试';
-  if(kind==='unauthenticated'||kind==='invalid_grant') return '登录已过期，请重新登录';
-  const msg=String(error.message||'');
   if(/Failed to fetch|NetworkError|Load failed|ERR_/i.test(msg)) return '云端连接失败，请检查网络后重试';
   return msg||'云同步失败';
 }
@@ -1290,18 +1301,24 @@ async function refreshCloudUser(){
 
 /* ── 云端读写（全部省略 owner_id，由 DEFAULT auth.uid() 与 RLS 决定归属）── */
 async function cloudPushParams(p){
+  const stamp=new Date().toISOString();
   const { data, error }=await cloud.database.from('nav_params')
-    .upsert({ data:p, updated_at:new Date().toISOString() }, { onConflict:'owner_id' })
+    .upsert({ data:p, updated_at:stamp }, { onConflict:'owner_id' })
     .select();
   if(error) throw error;
   assertRows(data,1,'参数保存');
-  return data.length;
+  // 返回「本次写入的版本戳」，调用方据此更新本机快照（云端若不回显 updated_at 就用本地时戳兜底）
+  const row=(Array.isArray(data)&&data.length)?data[0]:null;
+  return (row && row.updated_at) || stamp;
 }
-async function cloudPullParams(){
-  const { data, error }=await cloud.database.from('nav_params').select('data').limit(1);
+/* 读云端参数：内容 + 版本戳。updated_at 原先只写不读，是「有没有别的设备写过」的唯一依据。 */
+async function cloudPullParamsMeta(){
+  const { data, error }=await cloud.database.from('nav_params').select('data,updated_at').limit(1);
   if(error) throw error;
-  return (Array.isArray(data)&&data.length) ? data[0].data : null;
+  const row=(Array.isArray(data)&&data.length)?data[0]:null;
+  return { data:row?row.data:null, updated_at:row?(row.updated_at||null):null, exists:!!row };
 }
+async function cloudPullParams(){ return (await cloudPullParamsMeta()).data; }
 async function cloudPullRecords(){
   const { data, error }=await cloud.database.from('nav_manual_records')
     .select('trade_date').order('trade_date',{ascending:true});
@@ -1334,11 +1351,14 @@ async function cloudAfterLogin(){
   renderCloudBar();
   setCloudBar('pending','已登录 '+maskEmail(cloudUser.email)+' · 正在读取云端…');
   try{
-    const [rp,rr]=await Promise.all([cloudPullParams(), cloudPullRecords()]);
-    if(!rp && rr.length===0){
+    const [pm,rr]=await Promise.all([cloudPullParamsMeta(), cloudPullRecords()]);
+    cloudRemoteStamp=pm.updated_at||null;      // 记下比对基准
+    cloudRemoteRecords=rr.slice();
+    if(!pm.data && rr.length===0){
       const lr=loadManualRecords();
-      await cloudPushParams(loadNavParams());
+      cloudRemoteStamp=await cloudPushParams(loadNavParams());
       await cloudPushRecords(lr);
+      cloudRemoteRecords=lr.slice();
       cloudAutoSync=true; setCloudPref('push');
       setCloudBar('on','已登录 '+maskEmail(cloudUser.email)+' · 云端为空，已把本机参数与 '+lr.length+' 条登记记录上传');
     }else{
@@ -1379,8 +1399,9 @@ async function cloudUploadAll(){
   }
   setCloudBar('pending','正在上传本机数据到云端…');
   try{
-    await cloudPushParams(loadNavParams());
+    const stamp=await cloudPushParams(loadNavParams());
     const r=await cloudPushRecords(lr);
+    cloudRemoteStamp=stamp; cloudRemoteRecords=lr.slice();
     cloudAutoSync=true; setCloudPref('push');
     setCloudBar('on','已上传：参数 ✔ ｜ 登记 +'+r.added+' / −'+r.removed+'（云端共 '+lr.length+' 条）· 后续自动同步');
     showToast('已上传到云端');
@@ -1390,10 +1411,12 @@ async function cloudDownloadAll(){
   if(!cloudUser) return;
   setCloudBar('pending','正在从云端拉取…');
   try{
-    const rp=await cloudPullParams();
+    const pm=await cloudPullParamsMeta();
     const rr=await cloudPullRecords();
-    if(!rp && !rr.length){ setCloudBar('','云端暂无数据，本机未改动'); showToast('云端暂无数据'); return; }
-    if(rp) saveNavParamsLocalOnly(rp);
+    cloudRemoteStamp=pm.updated_at||null;      // 刚拉过 = 本机已与云端对齐，快照跟着刷新
+    cloudRemoteRecords=rr.slice();
+    if(!pm.data && !rr.length){ setCloudBar('','云端暂无数据，本机未改动'); showToast('云端暂无数据'); return; }
+    if(pm.data) saveNavParamsLocalOnly(pm.data);
     saveManualRecordsLocalOnly(rr);
     cloudAutoSync=true; setCloudPref('pull');
     setCloudBar('on','已从云端拉取：参数 '+(rp?'✔':'—')+' ｜ 登记 '+rr.length+' 条 · 后续自动同步');
@@ -1401,21 +1424,94 @@ async function cloudDownloadAll(){
     renderNav();
   }catch(e){ setCloudBar('err','拉取失败：'+cloudErrMsg(e)); }
 }
+/* 掐掉所有待发的自动推送。
+   原先守卫只在**排期时**判一次（cloudReady && cloudUser && cloudAutoSync），
+   回调里不再校验，cloudSignOut 也没有 clearTimeout —— 改完参数 900ms 内点
+   「退出登录」，那条待发的推送照样执行，还会把状态条改写成
+   「已登录 xxx · 参数已同步」，与实际登录态自相矛盾。 */
+function cloudCancelPendingPush(){
+  if(cloudParamTimer){ clearTimeout(cloudParamTimer); cloudParamTimer=null; }
+  if(cloudRecTimer){ clearTimeout(cloudRecTimer); cloudRecTimer=null; }
+}
+
+/* ── 冲突检测 / 重试 ─────────────────────────────────────────────── */
+function sameSet(a,b){
+  if(!Array.isArray(a)||!Array.isArray(b)||a.length!==b.length) return false;
+  const s=new Set(a); return b.every(x=>s.has(x));
+}
+/* 自动推送前的闸门：把云端现状与本机快照比对。
+   任一项不一致 = 另一台设备在此期间写过 → 暂停自动同步，交回用户决定。 */
+async function cloudDetectExternalChange(){
+  const [pm,rr]=await Promise.all([cloudPullParamsMeta(), cloudPullRecords()]);
+  const stamp=pm.updated_at||null;
+  return {
+    changed: !!((cloudRemoteStamp && stamp && stamp!==cloudRemoteStamp)
+             || (cloudRemoteRecords && !sameSet(cloudRemoteRecords, rr))),
+    stamp: stamp,
+    records: rr
+  };
+}
+function cloudPauseAutoSync(what){
+  cloudAutoSync=false;
+  setCloudBar('pending','检测到'+what+'已被另一台设备更新 · 自动同步已暂停，以免整体覆盖 · '+
+    '请用「上传本机 → 云端」（会先弹确认）或「从云端拉取」二选一');
+}
+/* 推送失败自动重试：网络抖动是最常见原因，重试 2 次（1.5s / 3s 退避）。
+   权限类与会话类错误重试没有意义，直接抛出。 */
+function isFatalCloudErr(e){
+  const code=(e&&e.code)||'', kind=(e&&e.kind)||'';
+  const status=Number((e&&(e.status||e.statusCode))||0);
+  return code==='42501' || code==='42P01'
+    || kind==='unauthenticated' || kind==='invalid_grant' || status===401;
+}
+async function cloudWithRetry(fn,tries){
+  const n=tries||3;
+  let last=null;
+  for(let i=0;i<n;i++){
+    try{ return await fn(); }
+    catch(e){
+      last=e;
+      if(isFatalCloudErr(e)) throw e;
+      if(i<n-1) await new Promise(r=>setTimeout(r,1500*(i+1)));
+    }
+  }
+  throw last;
+}
 /* 自动推送（仅已登录且已选定同步方向时生效，做 900ms 防抖） */
 function cloudScheduleParamsPush(p){
   if(!cloudReady || !cloudUser || !cloudAutoSync) return;
   clearTimeout(cloudParamTimer);
   cloudParamTimer=setTimeout(async ()=>{
-    try{ await cloudPushParams(p); setCloudBar('on','已登录 '+maskEmail(cloudUser.email)+' · 参数已同步'); }
-    catch(e){ setCloudBar('err','参数同步失败：'+cloudErrMsg(e)); }
+    cloudParamTimer=null;
+    if(!cloudReady || !cloudUser || !cloudAutoSync) return;   // 排期到执行之间可能已登出
+    try{
+      // 先比对云端现状：本机快照之后若有人写过，就不再自动覆盖
+      const chk=await cloudDetectExternalChange();
+      if(chk.changed){
+        cloudRemoteStamp=chk.stamp; cloudRemoteRecords=chk.records;
+        cloudPauseAutoSync('云端数据'); return;
+      }
+      cloudRemoteStamp=await cloudWithRetry(()=>cloudPushParams(p));
+      setCloudBar('on','已登录 '+maskEmail(cloudUser.email)+' · 参数已同步');
+    }catch(e){ setCloudBar('err','参数同步失败：'+cloudErrMsg(e)); }
   },900);
 }
 function cloudScheduleRecordsPush(a){
   if(!cloudReady || !cloudUser || !cloudAutoSync) return;
   clearTimeout(cloudRecTimer);
   cloudRecTimer=setTimeout(async ()=>{
+    cloudRecTimer=null;
+    if(!cloudReady || !cloudUser || !cloudAutoSync) return;   // 同上
     try{
-      const r=await cloudPushRecords(a);
+      /* 登记同步是「补齐缺失 + 删除多余」，删除这一半会动到别人的数据，
+         所以同样先过闸门：云端登记集合与上次所见不一致就停下来问用户。 */
+      const chk=await cloudDetectExternalChange();
+      if(chk.changed){
+        cloudRemoteStamp=chk.stamp; cloudRemoteRecords=chk.records;
+        cloudPauseAutoSync('云端数据'); return;
+      }
+      const r=await cloudWithRetry(()=>cloudPushRecords(a));
+      cloudRemoteRecords=a.slice();
       setCloudBar('on','已登录 '+maskEmail(cloudUser.email)+' · 登记已同步（+'+r.added+' / −'+r.removed+'）');
     }catch(e){ setCloudBar('err','登记同步失败：'+cloudErrMsg(e)); }
   },900);
@@ -1425,6 +1521,7 @@ async function cloudSignOut(){
     const { error }=await cloud.auth.signOut();
     if(error){ setCloudBar('err','退出登录失败：'+cloudErrMsg(error)); return; }
   }catch(e){ setCloudBar('err','退出登录失败：'+cloudErrMsg(e)); return; }
+  cloudCancelPendingPush();
   cloudUser=null; cloudAutoSync=false; pendingEmailOtp=null; pendingReset=null;
   setCloudPref('');
   if(cloudReady) renderCloudBar();
@@ -1437,13 +1534,14 @@ async function cloudSignOut(){
        每改一次参数都弹一次会变成连环打断；
      · 登录后首次播种（cloudAfterLogin）只在云端为空时触发，本就没有覆盖风险。
    返回 Promise<boolean>，语义与原生 confirm 对齐。 */
-let cfResolve=null;
+let cfResolve=null, cfPrevFocus=null;
 function cfAsk(title, sub, lines){
   return new Promise(resolve=>{
     const mask=document.getElementById('cfMask');
     if(!mask){ resolve(false); return; }            // 节点缺失时保守判否，绝不放行覆盖
     if(cfResolve){ cfResolve(false); cfResolve=null; }  // 连点两次：先结掉上一个，避免 Promise 永久悬空
     cfResolve=resolve;
+    cfPrevFocus=document.activeElement;             // 关闭后把焦点还给触发它的按钮
     const t=document.getElementById('cfTitle'); if(t) t.textContent=title||'确认';
     const s=document.getElementById('cfSub');   if(s) s.textContent=sub||'';
     const b=document.getElementById('cfBody');
@@ -1460,9 +1558,42 @@ function cfClose(ok){
   const mask=document.getElementById('cfMask'); if(mask) mask.classList.remove('show');
   const r=cfResolve; cfResolve=null;
   if(r) r(!!ok);
+  restoreFocus(cfPrevFocus); cfPrevFocus=null;
+}
+
+/* ── 对话框键盘可达性（登录弹窗 / 覆盖确认弹窗同一套标准）──────────
+   原先只有覆盖确认弹窗做了 Esc；登录弹窗既不能 Esc 关闭、也没有焦点圈定，
+   Tab 会一路跑到弹窗背后的页面元素上。下面三件套两个弹窗共用。 */
+function restoreFocus(el){
+  if(el && typeof el.focus==='function'){ try{ el.focus(); }catch(e){} }
+}
+/* 弹窗内当前真正可聚焦的元素：排掉 disabled、排掉非当前标签页的 <form hidden>、
+   再用 getClientRects() 排掉 display:none 的（本页 .btn 自带 display，hidden 不总生效）*/
+function dialogFocusables(mask){
+  if(!mask) return [];
+  return Array.prototype.slice.call(mask.querySelectorAll('button,input,select,textarea,a[href]'))
+    .filter(el=>{
+      if(el.disabled) return false;
+      const f=el.closest('form');
+      if(f && f.hidden) return false;
+      return el.getClientRects().length>0;
+    });
+}
+/* 打开弹窗时的默认落点：当前可见面板的第一个输入框，没有则第一个可聚焦控件 */
+function dialogFocusDefault(mask){
+  if(!mask) return null;
+  const forms=mask.querySelectorAll('form');
+  for(let i=0;i<forms.length;i++){
+    if(forms[i].hidden) continue;
+    const inp=forms[i].querySelector('input:not([disabled])');
+    if(inp) return inp;
+  }
+  const list=dialogFocusables(mask);
+  return list.length ? list[0] : null;
 }
 
 /* ── 登录弹窗 ───────────────────────────────────────────────────── */
+let cmPrevFocus=null;
 function cmMsg(text,kind){
   const el=document.getElementById('cmMsg'); if(!el) return;
   el.className='cm-msg'+(kind?' '+kind:'');
@@ -1474,13 +1605,20 @@ function cmSwitchTab(view){
   Object.keys(panels).forEach(k=>{ const p=document.getElementById(panels[k]); if(p) p.hidden=(k!==view); });
   Object.keys(tabs).forEach(k=>{ const b=document.getElementById(tabs[k]); if(b) b.classList.toggle('active', k===view); });
   cmMsg('');
+  const mask=document.getElementById('cmMask');
+  if(mask && mask.classList.contains('show')) restoreFocus(dialogFocusDefault(mask));
 }
 function cmShow(view){
   const mask=document.getElementById('cmMask'); if(!mask) return;
+  cmPrevFocus=document.activeElement;
   mask.classList.add('show');
-  cmSwitchTab(view||'pwd');
+  cmSwitchTab(view||'pwd');   // 内部会把焦点落到当前面板的第一个输入框
 }
-function cmHide(){ const m=document.getElementById('cmMask'); if(m) m.classList.remove('show'); cmMsg(''); }
+function cmHide(){
+  const m=document.getElementById('cmMask'); if(m) m.classList.remove('show');
+  cmMsg('');
+  restoreFocus(cmPrevFocus); cmPrevFocus=null;
+}
 function cmBusy(b){
   ['cmPwdSubmit','cmOtpSend','cmOtpSubmit','cmSuSend','cmSuSubmit','cmResetSend','cmResetSubmit','cmPwdForgot','cmResetBack']
     .forEach(id=>{ const el=document.getElementById(id); if(el) el.disabled=!!b; });
@@ -1595,13 +1733,27 @@ function initCloudBar(){
   bind('cloudPullBtn',  cloudDownloadAll);
   bind('cmCloseBtn',    cmHide);
   bind('cmMask',        ev=>{ if(ev.target===ev.currentTarget) cmHide(); });
-  // 覆盖确认弹窗：按钮或遮罩点击→关闭。ESC 加 cfResolve 前置判断，
-  // 只在确认弹窗真的开着时才响应，不会误关同时可能开着的登录弹窗
-  //（登录弹窗自身没有 ESC 处理，所以这里不存在监听器互相打架的问题）。
+  // 覆盖确认弹窗：按钮或遮罩点击→关闭。
   bind('cfOk',     ()=>cfClose(true));
   bind('cfCancel', ()=>cfClose(false));
   bind('cfMask',   ev=>{ if(ev.target===ev.currentTarget) cfClose(false); });
-  document.addEventListener('keydown', ev=>{ if(ev.key==='Escape' && cfResolve) cfClose(false); });
+  /* 两个弹窗共用一套键盘行为：Esc 关闭 + Tab 焦点圈定。
+     · Esc 优先级：覆盖确认弹窗开着就先关它（它总是叠在登录弹窗之上）；
+     · Tab：焦点在弹窗内循环，不再跑到弹窗背后的页面控件上。 */
+  document.addEventListener('keydown', ev=>{
+    const cf=document.getElementById('cfMask'), cm=document.getElementById('cmMask');
+    const top = (cfResolve && cf && cf.classList.contains('show')) ? cf
+              : (cm && cm.classList.contains('show')) ? cm : null;
+    if(!top) return;
+    if(ev.key==='Escape'){ ev.preventDefault(); (top===cf) ? cfClose(false) : cmHide(); return; }
+    if(ev.key!=='Tab') return;
+    const list=dialogFocusables(top);
+    if(!list.length) return;
+    const first=list[0], last=list[list.length-1], cur=document.activeElement;
+    if(!top.contains(cur)){ ev.preventDefault(); restoreFocus(ev.shiftKey ? last : first); return; }
+    if(ev.shiftKey && cur===first){ ev.preventDefault(); restoreFocus(last); }
+    else if(!ev.shiftKey && cur===last){ ev.preventDefault(); restoreFocus(first); }
+  });
   bind('cmTabPwd',      ()=>cmSwitchTab('pwd'));
   bind('cmTabOtp',      ()=>cmSwitchTab('otp'));
   bind('cmTabSignup',   ()=>cmSwitchTab('signup'));
@@ -1624,7 +1776,7 @@ function initCloudBar(){
   if(!initCloudClient()){ renderCloudBar(); return; }
   try{
     cloud.auth.onAuthStateChange((event)=>{
-      if(event==='SIGNED_OUT'){ cloudUser=null; cloudAutoSync=false; renderCloudBar(); }
+      if(event==='SIGNED_OUT'){ cloudCancelPendingPush(); cloudUser=null; cloudAutoSync=false; renderCloudBar(); }
     });
   }catch(e){}
   renderCloudBar();
@@ -1635,6 +1787,8 @@ function initCloudBar(){
     if(pref==='push'){
       cloudAutoSync=true;
       setCloudBar('on','已登录 '+maskEmail(cloudUser.email)+' · 自动同步中（以本机为准）');
+      // 不覆盖云端，但要记下云端当前版本戳，作为「别的设备是否又写过」的比对基准
+      cloudPullParamsMeta().then(m=>{ cloudRemoteStamp=m.updated_at||null; }).catch(()=>{});
     }else if(pref==='pull'){
       cloudDownloadAll();
     }else{

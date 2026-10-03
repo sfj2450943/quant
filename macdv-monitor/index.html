@@ -116,6 +116,9 @@ tbody tr.det-hidden{display:none}
 .c-code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:var(--tx2)}
 .c-name{font-weight:600}
 .c-price{font-weight:600}
+/* 备源（东财）没有实时快照时，价格列显示的是收盘价，必须一眼看得出来 */
+.pxclose{color:var(--tx2)}
+.pxclose i{font-style:normal;font-size:9px;color:var(--tx3);margin-left:2px;vertical-align:super}
 .c-pct{font-size:12px}
 .up{color:var(--up)} .dn{color:var(--dn)} .flat{color:var(--tx2)}
 
@@ -379,23 +382,32 @@ function macdv(bars,mode){
   const e12=ema(close,N_FAST), e26=ema(close,N_SLOW);
   const atr=(mode==='wilder'?atrWilder:atrMA)(bars,N_ATR);
   if(!atr) return null;
-  const start=N_ATR;                       // ATR 首个有效值所在 K 线下标
+  /* ATR 为 0 只可能出现在「26 日窗口内全程零波动」（长期停牌 / 连续一字板）。
+     旧实现在循环里 `if(!(a>0)) return null`：一个零点就把 1800+ 根有效序列整条作废，
+     该标的直接从表里消失，而且没有任何提示。这里改为：
+       · 开头的零点把序列起点后移跳过；
+       · 中途的零点沿用最近一个有效 ATR，只让该点退化，不牵连其余部分（并计数上报）。 */
+  let start=N_ATR;                         // ATR 首个有效值所在 K 线下标
+  while(start<N && !(atr[start-N_ATR]>0)) start++;
+  if(start>=N) return null;                // 整条都是零波动 → 确实没法算
   const mv=new Array(N-start), dates=new Array(N-start);
+  let a0=null, zeroPts=0;
   for(let j=0;j<mv.length;j++){
     const i=start+j, a=atr[i-start];
-    if(!(a>0)) return null;                // ATR 为 0（一字板/停牌）→ 整条序列作废
-    mv[j]=(e12[i]-e26[i])/a*100;
     dates[j]=bars[i].d;
+    if(a>0) a0=a; else zeroPts++;
+    mv[j]=(e12[i]-e26[i])/a0*100;
   }
   const sig=ema(mv,N_SIG);
   const hist=mv.map((v,j)=>v-sig[j]);
   const e200=emaSmaSeed(close,200);
-  return {bars,mv,sig,hist,dates,start,e12,e26,atr,e200,mode:mode||'ma'};
+  return {bars,mv,sig,hist,dates,start,e12,e26,atr,e200,mode:mode||'ma',zeroPts};
 }
 /** 取指定 K 线下标处的完整读数 */
 function at(series, barIdx){
+  if(!series) return null;                 // 必须先判空：原先上来就解引用 series.start
   const j=barIdx-series.start;
-  if(!series || j<0 || j>=series.mv.length) return null;
+  if(j<0 || j>=series.mv.length) return null;
   const ema200=series.e200[barIdx];
   const close=series.bars[barIdx].c;
   return {
@@ -446,10 +458,17 @@ function bandOf(v){ return v==null?null:stageOf(v).k; }
 
 /* ═══════════════ 取数（JSONP） ═══════════════ */
 let seq=0;
+/* 代码 → 交易所前缀。
+   坑：兜底不能是 'sh'。深市 ETF/LOF/封基（159xxx / 16xxxx / 18xxxx）不匹配 ^(0|3)，
+   会一路落到兜底 sh，而腾讯对**错市场**的代码会返回不带前复权的 `day` 而不是 `qfqday`
+   → K 线静默不复权、信号全错却毫无报错。当前 12 只标的都是 6xx/0xx 所以没踩到，
+   但只要往标的池里加一只深市 ETF 就会中招。 */
 function mkt(code){
-  if(/^(8|4)/.test(code)) return 'bj';
-  if(/^6/.test(code))     return 'sh';
-  if(/^(0|3)/.test(code)) return 'sz';
+  const c=String(code||'');
+  if(/^(8|4)/.test(c))   return 'bj';
+  if(/^6/.test(c))       return 'sh';
+  if(/^(0|3)/.test(c))   return 'sz';
+  if(/^1[5-8]/.test(c))  return 'sz';   // 159/16x/18x：深市 ETF、LOF、封闭式基金
   return 'sh';
 }
 function jsonpVar(url,varName,timeout=11000){
@@ -486,8 +505,22 @@ async function fromTx(code,period){
   const d=j.data[sym]; if(!d) throw new Error('nodata');
   const arr=d['qfq'+period]||d[period]; if(!arr||!arr.length) throw new Error('nokline');
   const bars=arr.map(r=>({d:r[0],o:+r[1],c:+r[2],h:+r[3],l:+r[4]}));
+  /* 腾讯 qt 是**按位取值**的数组，字段一增删位次就漂。取值前先验形：
+     现价必须为正数，时间必须是 14 位 YYYYMMDDHHMMSS；任一项不成立就整条弃用 ——
+     宁可不显示实时价（由下面的「用最后一根 K 线收盘价兜底 + 标注」接手），
+     也不要把别的字段当成价格或时间显示出来。 */
   let quote=null;
-  if(d.qt&&d.qt[sym]){ const q=d.qt[sym]; quote={price:+q[3], chg:+q[31], pct:+q[32], time:q[30]}; }
+  if(d.qt&&d.qt[sym]){
+    const q=d.qt[sym], px=+q[3], t=String(q[30]==null?'':q[30]);
+    if(px>0){
+      quote={
+        price:px,
+        chg : isFinite(+q[31]) ? +q[31] : null,
+        pct : isFinite(+q[32]) ? +q[32] : null,
+        time: /^\d{14}$/.test(t) ? t : (bars.length ? bars[bars.length-1].d : null)
+      };
+    }
+  }
   return {bars,quote};
 }
 /** 东财（备源，函数式回调） */
@@ -524,6 +557,15 @@ let sortKey='week', sortDir=-1;      // 周线为主参考：默认按周线 MAC
 let loading=false;
 const expanded=new Set();
 
+/* 数据时间戳：14 位 YYYYMMDDHHMMSS → 显示到分钟；8 位 YYYYMMDD → 只显示日期
+   （备源没有实时快照时，时间只能落到最后一根 K 线上）。其余形态原样显示，不硬切。 */
+function fmtStamp(t){
+  const s=String(t||'');
+  if(/^\d{14}$/.test(s)) return s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6,8)+' '+s.slice(8,10)+':'+s.slice(10,12);
+  if(/^\d{8}$/.test(s))  return s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6,8);
+  return s||'—';
+}
+
 function setStatus(kind,txt){
   const d=document.getElementById('dot');
   d.className='dot'+(kind?' '+kind:'');
@@ -548,10 +590,17 @@ async function loadAll(){
     ok++;
     rec[p]=macdv(r.bars,atrMode);
     rec['bars_'+p]=r.bars;
-    if(r.quote){ rec.price=r.quote.price; rec.chg=r.quote.chg; rec.pct=r.quote.pct; rec.time=r.quote.time; }
+    if(r.quote){
+      rec.price=r.quote.price; rec.chg=r.quote.chg; rec.pct=r.quote.pct; rec.time=r.quote.time;
+      rec.priceFromBar=false;
+    }
     if(!rec.price&&r.bars.length){
+      /* 兜底：没有实时快照（东财备源）就用最后一根 K 线的前复权收盘价。
+         它不等于「现价」—— 盘中不会动，且遇除权日会被前复权基准带偏。
+         所以必须打标记，让表格显式说明这是收盘价，别让用户误当实时价看。 */
       const b=r.bars, c=b[b.length-1].c, pc=b[b.length-2]?b[b.length-2].c:c;
-      rec.price=c; rec.pct=pc?(c-pc)/pc*100:0; rec.chg=c-pc;
+      rec.price=c; rec.pct=pc?(c-pc)/pc*100:0; rec.chg=c-pc; rec.priceFromBar=true;
+      if(!rec.time) rec.time=b[b.length-1].d;    // 至少把「数据时间」落到最后一根 K 线
     }
   });
 
@@ -563,9 +612,7 @@ async function loadAll(){
   // 数据时间
   let t='';
   for(const c in store){ if(store[c].time&&store[c].time>t) t=store[c].time; }
-  document.getElementById('asof').textContent = t
-    ? t.slice(0,4)+'-'+t.slice(4,6)+'-'+t.slice(6,8)+' '+t.slice(8,10)+':'+t.slice(10,12)
-    : '—';
+  document.getElementById('asof').textContent = fmtStamp(t);
   render();
 }
 
@@ -725,7 +772,11 @@ function render(){
       <td class="l"><span class="exp ${open?'open':''}" data-exp="${rec.code}">▶</span></td>
       <td class="l c-code">${rec.code}</td>
       <td class="l c-name">${rec.name}</td>
-      <td class="c-price">${rec.price!=null?rec.price.toFixed(2):'<span class="na">—</span>'}</td>
+      <td class="c-price">${rec.price!=null
+        ? (rec.priceFromBar
+            ? `<span class="pxclose" title="备源（东财）没有实时快照：此为该交易日的前复权收盘价，非盘中现价">${rec.price.toFixed(2)}<i>收盘</i></span>`
+            : rec.price.toFixed(2))
+        : '<span class="na">—</span>'}</td>
       <td class="c-pct ${cls(rec.pct)}">${rec.pct!=null?fmt(rec.pct)+'%':'—'}</td>
       <td>${mvCell(w)}${wkTag?`<div style="margin-top:2px">${wkTag}</div>`:''}</td>
       <td class="sub">${w?fmt(w.sig):'—'}</td>
@@ -780,6 +831,10 @@ function detailHtml(rec,d,w){
       <tr><td class="k">周线根数</td><td>${rec.bars_week?rec.bars_week.length:0}</td></tr>
       <tr><td class="k">ATR 口径</td><td>${atrMode==='ma'?'MA(TR,26) 简单平均':'Wilder RMA(26)'}</td></tr>
       <tr><td class="k">复权</td><td>前复权</td></tr>
+      <tr><td class="k">现价来源</td><td>${rec.priceFromBar?'备源收盘价（无实时快照）':'实时快照'}</td></tr>
+      ${(rec.day&&rec.day.zeroPts)||(rec.week&&rec.week.zeroPts)
+        ? `<tr><td class="k">零波动点</td><td>日线 ${rec.day?rec.day.zeroPts:0} · 周线 ${rec.week?rec.week.zeroPts:0}（长期停牌 / 一字板，ATR 沿用前值）</td></tr>`
+        : ''}
     </table></div>
   </div>`;
 }
@@ -807,8 +862,12 @@ function collectChanges(rows){
       if(!rd) return;
       const key=r.rec.code+'_'+p;
       const stk=stageOf(rd.mv).k; nSt[key]=stk;
-      if(pSt[key] && pSt[key]!==stk && stk!=='na')
-        st.push({name:r.rec.name,p,fromK:pSt[key],from:stageOf(bandVal(pSt[key])).t,toK:stk,to:stageOf(rd.mv).t});
+      if(pSt[key] && pSt[key]!==stk && stk!=='na'){
+        const bv=bandVal(pSt[key]);           // 认不出的旧键直接显示原键名，不编造档位
+        st.push({name:r.rec.name,p,fromK:pSt[key],
+                 from: bv==null ? String(pSt[key]) : stageOf(bv).t,
+                 toK:stk,to:stageOf(rd.mv).t});
+      }
       const g=sigOf(rd); const gk=g?g.key:'none'; nSg[key]=gk;
       if(pSg[key]!=null && pSg[key]!==gk)
         sg.push({name:r.rec.name,p,from:pSg[key],to:gk});
@@ -818,7 +877,17 @@ function collectChanges(rows){
   try{ localStorage.setItem(lsKey(LS_SIG),JSON.stringify(nSg)); }catch(e){}
   return {st,sg};
 }
-function bandVal(k){ return k==='ob'?160:k==='up'?100:k==='mid'?0:k==='dn'?-100:-160; }
+/* 阶段键 → 代表值。未知键返回 null。
+   旧实现是三目链兜底 -160，于是任何不认识的键（如 'na'，或旧版本写进 localStorage 的
+   其它键名）都会被 stageOf 当成「超卖」，在阶段变化条目里显示一个假标签。 */
+function bandVal(k){
+  if(k==='ob')  return 160;
+  if(k==='up')  return 100;
+  if(k==='mid') return 0;
+  if(k==='dn')  return -100;
+  if(k==='os')  return -160;
+  return null;
+}
 
 /* ═══════════════ 历史轮次（近5年周线 DIF 阈值） ═══════════════ */
 const HWIN=260;   // 展示/统计窗口：尾部 260 周 ≈ 近 5 年

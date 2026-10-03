@@ -14,6 +14,7 @@
 """
 import datetime as dt
 import json
+import os
 import sys
 import urllib.request
 from pathlib import Path
@@ -248,9 +249,37 @@ def build():
                  "cagr_at_107": {str(w): grid[hm_k.index(1.07)][i] for i, w in enumerate(hm_ma)}},
     }
     out = BASE / "data.js"
-    out.write_text("window.HL_DATA=" + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";",
-                   encoding="utf-8")
-    print(f"[OK] {out}  {out.stat().st_size/1024:.0f} KB  数据日 {dates[last_i]}  共 {n} 根")
+    payload = ("window.HL_DATA=" + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";")
+
+    # ── 写前校验（2026-10-04 加，勿删）──────────────────────────────────
+    # 上游接口偶尔会返回缩水响应（例如只给 200 根）。旧写法直接 write_text 会**静默覆盖**
+    # 155KB 的完整历史，页面看不出任何异常、也不会报错。所以落盘前必须先比 bar 数。
+    prev_bars = None
+    if out.exists():
+        try:
+            txt = out.read_text(encoding="utf-8")
+            prev = json.loads(txt[txt.index("=") + 1:].rstrip().rstrip(";"))
+            prev_bars = (prev.get("meta") or {}).get("bars")
+        except Exception:
+            prev_bars = None      # 旧文件不可解析 → 不据此拦截，照常写
+    if prev_bars and n < prev_bars * 0.9:
+        print(f"[拒绝写入] 本次只取到 {n} 根 K 线，不足已有 {prev_bars} 根的 90%"
+              f"（{prev_bars * 0.9:.0f} 根）—— 疑似上游缩水响应，已保留原 data.js 不动。")
+        sys.exit(2)
+    for _k in ("meta", "latest", "stats", "series", "trades", "pos", "equity", "heat"):
+        if _k not in data:
+            sys.exit(f"[拒绝写入] 生成的数据缺字段 {_k}，已保留原 data.js 不动。")
+    if not (len(dates) == len(close) == len(openp)):
+        sys.exit("[拒绝写入] date/close/open 长度不一致，已保留原 data.js 不动。")
+
+    # 原子替换：先写 .tmp 再 os.replace（同分区 rename 是原子的）。
+    # 避免写一半被中断留下半截 data.js —— 那会让页面直接白屏，且原文件已丢。
+    tmp = out.with_name(out.name + ".tmp")
+    tmp.write_text(payload, encoding="utf-8")
+    os.replace(tmp, out)
+
+    print(f"[OK] {out}  {out.stat().st_size/1024:.0f} KB  数据日 {dates[last_i]}  共 {n} 根"
+          + (f"（上次 {prev_bars} 根）" if prev_bars else ""))
     for w in MA_LIST:
         st = latest[f"state{w}"]
         print(f"  MA{w}: 值 {ma_now[w]:.4f}  止盈线 {ma_now[w]*K:.4f}  偏离 {latest[f'dev{w}']*100:+.2f}%  状态 {st}"
